@@ -1,20 +1,27 @@
 module open_spacecharge_mod
 
+use, intrinsic :: iso_fortran_env
+
 implicit none
 
+! Fortran 2008
+integer, parameter, private :: sp = REAL32
+integer, parameter, private :: dp = REAL64
+integer, parameter, private :: qp = REAL128
+
 type field_struct
-  real(8) :: E(3) = 0        ! electric field
-  real(8) :: B(3) = 0        ! magnetic field
+  real(dp) :: E(3) = 0        ! electric field
+  real(dp) :: B(3) = 0        ! magnetic field
 end type
 
 type mesh3d_struct
-  integer :: n(3) = [64, 64, 64]       ! Grid sizes in x, y, z
-  real(8) :: min(3)                    ! Minimim in each dimension
-  real(8) :: max(3)                    ! Maximum in each dimension
-  real(8) :: delta(3)                  ! Grid spacing
-  real(8) :: gamma                     ! Relativistic gamma
-  real(8), allocatable, dimension(:,:,:) :: charge            ! Charge density grid
-  real(8), allocatable, dimension(:,:,:) :: phi               ! electric potential grid
+  integer :: n(3) = [64, 64, 64]       ! Grid sizes in x, y, z (m)
+  real(dp) :: min(3)                    ! Minimim in each dimension
+  real(dp) :: max(3)                    ! Maximum in each dimension
+  real(dp) :: delta(3)                  ! Grid spacing
+  real(dp) :: gamma                     ! Relativistic gamma
+  real(dp), allocatable, dimension(:,:,:) :: charge            ! Charge density grid
+  real(dp), allocatable, dimension(:,:,:) :: phi               ! electric potential grid
   type(field_struct),  allocatable, dimension(:,:,:) :: field ! field grid
 end type
 
@@ -26,10 +33,10 @@ contains
 !------------------------------------------------------------------------
 !+
 
-subroutine deposit_bunch_on_mesh(xa, ya, za, lostflag,  charge, mesh3d, gamma)
+subroutine deposit_bunch_on_mesh(xa, ya, za, lostflag,  charge, mesh3d)
 type(mesh3d_struct) :: mesh3d
-real(8) :: charge, chrgpermacro, gamma
-real(8), dimension(:) :: xa, ya, za, lostflag 
+real(dp) :: charge, chrgpermacro
+real(dp), dimension(:) :: xa, ya, za, lostflag 
 integer, parameter :: idecomp = 999, npx=999, npy=999, npz = 999, n1 = 6 
 integer :: nraysp,maxrayp
 integer :: error
@@ -43,10 +50,6 @@ endif
 nraysp = size(xa)
 maxrayp = nraysp
 chrgpermacro =charge/ nraysp
-mesh3d%gamma = gamma
-
-print *, 'nraysp: ', nraysp
-print *, 'chrgpermacro: ', chrgpermacro
 
 call get_rho_and_mesh_spacing(xa, ya, za, lostflag, mesh3d%charge, mesh3d%delta(1),mesh3d%delta(2), mesh3d%delta(3), &
      mesh3d%min(1),mesh3d%min(2),mesh3d%min(3), chrgpermacro, &
@@ -68,15 +71,15 @@ end subroutine
 !+
 subroutine print_mesh3d(mesh3d)
 type(mesh3d_struct) :: mesh3d
-
+print *, '------------------------'
+print *, 'Mesh: '
 print *, 'n: ', mesh3d%n
 print *, 'min: ', mesh3d%min
 print *, 'max: ', mesh3d%max
 print *, 'delta: ', mesh3d%delta
 print *, 'gamma: ', mesh3d%gamma
+print *, '------------------------'
 end subroutine
-
-
 
 
 !------------------------------------------------------------------------
@@ -86,7 +89,7 @@ end subroutine
 
 subroutine space_charge_field_calc(mesh3d)
 type(mesh3d_struct) :: mesh3d
-real(8) :: gamma0
+real(dp) :: gamma0
 integer, parameter :: idecomp = 999, npx=999, npy=999, npz = 999
 integer, parameter :: idirectfieldcalc=1 ! =0 to compute phi and use finite differences for E; =1 to compute E directly
 integer, parameter :: igfflag=1 ! =0 for ordinary Green function; =1 for integrated Green function
@@ -108,19 +111,19 @@ end subroutine
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
-subroutine getfields(rho,gam0,dx,dy,dz,phi,ex,ey,ez,hx,hy,hz,nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc, &
-     &                ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl)
+subroutine getfields(rho,gam0,dx,dy,dz,phi,ex,ey,ez,bx,by,bz,nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc, &
+                     ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl)
 implicit none
 integer, intent(in) :: nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc
 integer, intent(in) :: ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl
-real(8), intent(in) :: gam0,dx,dy,dz
-real(8), intent(in), dimension(:,:,:) :: rho
-real(8), intent(out), dimension(:,:,:) :: phi,hx,hy,hz,ex,ey,ez
+real(dp), intent(in) :: gam0,dx,dy,dz
+real(dp), intent(in), dimension(:,:,:) :: rho
+real(dp), intent(out), dimension(:,:,:) :: phi,bx,by,bz,ex,ey,ez
 integer :: icomp,ierr
-real(8), parameter :: clight=299792458.d0
-real(8), parameter :: mu0=8.d0*asin(1.d0)*1.d-7
+real(dp), parameter :: clight=299792458.d0
+!real(dp), parameter :: mu0=8.d0*asin(1.d0)*1.d-7
 integer :: i,j,k
-real(8) :: gb0
+real(dp) :: gb0
 !
 
 
@@ -189,9 +192,9 @@ endif
 do k=1,nz
   do j=1,ny
     do i=1,nx
-      hx(i,j,k)=-ey(i,j,k)/clight/mu0*gb0/gam0
-      hy(i,j,k)= ex(i,j,k)/clight/mu0*gb0/gam0
-      hz(i,j,k)=0.d0
+      bx(i,j,k)=-ey(i,j,k)/clight/gb0/gam0
+      by(i,j,k)= ex(i,j,k)/clight/gb0/gam0
+      bz(i,j,k)=0.d0
     enddo
   enddo
 enddo
@@ -208,15 +211,15 @@ end subroutine
 subroutine depose_rho_scalar(xa,ya,za,lostflag,rho,chrgpermacro,ilo,ihi,jlo,jhi,klo,khi,      &
                              dx,dy,dz,xmin,ymin,zmin,nraysp,ilogbl,jlogbl,klogbl,ifail)
 implicit none
-integer, intent(in) :: nraysp !# of particles per MPI process
+integer, intent(in) :: nraysp !!-!# of particles per MPI process
 integer, intent(in) :: ilogbl,jlogbl,klogbl
 integer, intent(out) :: ifail
-real(8), intent(in) :: chrgpermacro
-real(8), intent(in), dimension(:) :: xa,ya,za,lostflag
+real(dp), intent(in) :: chrgpermacro
+real(dp), intent(in), dimension(:) :: xa,ya,za,lostflag
 integer :: ilo,jlo,klo,ihi,jhi,khi
-real(8), intent(out), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
-real(8) :: dx,dy,dz,xmin,ymin,zmin
-real(8) :: dxi,dyi,dzi,ab,de,gh,sumrho
+real(dp), intent(out), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
+real(dp) :: dx,dy,dz,xmin,ymin,zmin
+real(dp) :: dxi,dyi,dzi,ab,de,gh,sumrho
 integer :: n,ip,jp,kp
 integer :: myrank,ierr
 ifail=0
@@ -263,8 +266,8 @@ end subroutine
 ! Original:  subroutine ntrp3d(ptcls,msk,u,exyz,xmin,ymin,zmin,hx,hy,hz,n1,np,nx,ny,nz)
 subroutine interpolate_mesh3d(x, y, z, E, mesh3d)
 type(mesh3d_struct) ::  mesh3d
-real(8) :: x, y, z, E(3), H(3)
-real(8) :: hxi,hyi,hzi,ab,de,gh
+real(dp) :: x, y, z, E(3), H(3)
+real(dp) :: hxi,hyi,hzi,ab,de,gh
 integer :: ip,jp,kp,ip1,jp1,kp1
 integer :: nflag
 nflag=0
@@ -333,16 +336,16 @@ end subroutine
 
       subroutine openbcpotential(rho,phi,gam,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
      &           ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     USE mpi
-#endif
+!-!#endif
       implicit none
-      real(8) :: gam,dx,dy,dz
+      real(dp) :: gam,dx,dy,dz
       integer :: ilo,ihi,jlo,jhi,klo,khi
       integer :: ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr
-      real(8), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho,phi
+      real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho,phi
 !
-      complex*16, allocatable, dimension(:,:,:) :: crho2,ctmp2,cphi2,cgrn1 !what is the "1" for in cgrn1?
+      complex(dp), allocatable, dimension(:,:,:) :: crho2,ctmp2,cphi2,cgrn1 !what is the "1" for in cgrn1?
       integer :: ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl
       integer :: ilo_phi_gbl,ihi_phi_gbl,jlo_phi_gbl,jhi_phi_gbl,klo_phi_gbl,khi_phi_gbl
       integer :: ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl
@@ -352,20 +355,20 @@ end subroutine
       integer :: idecomp_in,idecomp_out,idirection,ipermute,iscale
       integer :: in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi
       integer :: out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi
-      real(8) :: time
+      real(dp) :: time
       integer :: i,j,k,ip,jp,kp,ndx
-      real(8) :: u,v,w,gval
-!-!   real(8), external :: coulombfun,igfcoulombfun !I prefer not to have an external directive, alternative is to use a module
-!-!   real(8), external :: igfexfun,igfeyfun,igfezfun
+      real(dp) :: u,v,w,gval
+!-!   real(dp), external :: coulombfun,igfcoulombfun !I prefer not to have an external directive, alternative is to use a module
+!-!   real(dp), external :: igfexfun,igfeyfun,igfezfun
       integer :: mprocs,myrank
-      real(8), parameter :: econst=299792458.d0**2*1.d-7
-#ifdef MPIPARALLEL
+      real(dp), parameter :: econst=299792458.d0**2*1.d-7
+!-!#ifdef MPIPARALLEL
 !     call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
 !     call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
-#else
+!-!#else
       mprocs=1
       myrank=0
-#endif
+!-!#endif
 !
       ilo_rho2_gbl=ilo_rho_gbl
       jlo_rho2_gbl=jlo_rho_gbl
@@ -393,26 +396,26 @@ end subroutine
       kperiod=khi_rho2_gbl-klo_rho2_gbl+1
 !
 !allocate the double-size complex array crho2:
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     call decompose(myrank,mprocs,ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,&
 !    &               idecomp,npx,npy,npz,ilo2,ihi2,jlo2,jhi2,klo2,khi2)
-#else
+!-!#else
       ilo2=ilo_rho2_gbl;ihi2=ihi_rho2_gbl; jlo2=jlo_rho2_gbl;jhi2=jhi_rho2_gbl; klo2=klo_rho2_gbl;khi2=khi_rho2_gbl
-#endif
+!-!#endif
       allocate(crho2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
       allocate(ctmp2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
       allocate(cphi2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
 !
 !store rho in a double-size complex array:
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     call movetodoublesizer2c(rho,crho2,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2, &
 !    &                         ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz)
-#else
+!-!#else
       crho2(:,:,:)=0.d0
       crho2(ilo:ihi,jlo:jhi,klo:khi)=rho(ilo:ihi,jlo:jhi,klo:khi)
-#endif
+!-!#endif
 !
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !!prepare for fft:
 !     idecomp_in=idecomp
 !     idecomp_out=idecomp
@@ -425,26 +428,26 @@ end subroutine
 !     call decompose(myrank,mprocs, &
 !    & ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl, &
 !    & idecomp_out,npx,npy,npz,out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi)
-#endif
+!-!#endif
 !
 ! fft the charge density:
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     call fft_perform(crho2,ctmp2,idirection,iperiod,jperiod,kperiod,  &
 !    &     in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
-#else
+!-!#else
       call ccfft3d(crho2,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
-#endif
+!-!#endif
       crho2(:,:,:)=ctmp2(:,:,:)  !now ctmp2 can be reused for next fft
 !
 ! compute the Green function (called cgrn1 below):
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     call decompose(myrank,mprocs,& !why does the following line contain rho2 indices?????
 !    &ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl,idecomp,npx,npy,npz,iloo,ihii,jloo,jhii,kloo,khii)
-#else
+!-!#else
       iloo=ilo_grn_gbl;ihii=ihi_grn_gbl; jloo=jlo_grn_gbl;jhii=jhi_grn_gbl; kloo=klo_grn_gbl;khii=khi_grn_gbl
-#endif
+!-!#endif
       allocate(cgrn1(iloo:ihii,jloo:jhii,kloo:khii))
 !     write(6,*)'igfflag,icomp=',igfflag,icomp
       do k=kloo,khii
@@ -461,42 +464,42 @@ end subroutine
            if(igfflag.eq.1.and.icomp.eq.1)gval=igfexfun(u,v,w,gam,dx,dy,dz)
            if(igfflag.eq.1.and.icomp.eq.2)gval=igfeyfun(u,v,w,gam,dx,dy,dz)
            if(igfflag.eq.1.and.icomp.eq.3)gval=igfezfun(u,v,w,gam,dx,dy,dz)
-           cgrn1(i,j,k)=cmplx(gval,0.d0)
+           cgrn1(i,j,k)= cmplx(gval,0.d0, dp)
           enddo
         enddo
       enddo
       
 ! fft the Green function:
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     call fft_perform(cgrn1,ctmp2,idirection,iperiod,jperiod,kperiod,  &
 !    &     in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
-# else
+!-!# else
       call ccfft3d(cgrn1,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
-#endif
+!-!#endif
 ! multiply the fft'd charge density and green function:
       cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
 ! now do the inverse fft:
       idirection=-1
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     call fft_perform(cphi2,ctmp2,idirection,iperiod,jperiod,kperiod,    &
 !    &     in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
-#else
+!-!#else
       call ccfft3d(cphi2,ctmp2,[-1,-1,-1],iperiod,jperiod,kperiod,0)
-#endif
+!-!#endif
       cphi2(:,:,:)=ctmp2(:,:,:)/((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod))
 !
 !store the physical portion of the double-size complex array in a non-double-size real array:
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     call movetosinglesizec2r(cphi2,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo,ihi,jlo,jhi,klo,khi, &
 !    &                         ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz)
-#else
-      phi(ilo:ihi,jlo:jhi,klo:khi)=cphi2(ilo:ihi,jlo:jhi,klo:khi)
+!-!#else
+      phi(ilo:ihi,jlo:jhi,klo:khi)=real(cphi2(ilo:ihi,jlo:jhi,klo:khi), dp)
       phi(ilo:ihi,jlo:jhi,klo:khi)=phi(ilo:ihi,jlo:jhi,klo:khi)*econst
-#endif
+!-!#endif
       return
       end
 !
@@ -506,8 +509,8 @@ end subroutine
 !+
       function coulombfun(u,v,w,gam) result(res)
       implicit none
-      real(8) :: res
-      real(8) :: u,v,w,gam
+      real(dp) :: res
+      real(dp) :: u,v,w,gam
       if(u.eq.0.d0 .and. v.eq.0.d0 .and. w.eq.0.d0)then
         res=0.d0
       return
@@ -522,11 +525,11 @@ end subroutine
 !+
       function igfcoulombfun(u,v,w,gam,dx,dy,dz) result(res)
       implicit none
-      real(8) :: res
-      real(8) :: u,v,w,gam,dx,dy,dz
-      real(8) :: x1,x2,y1,y2,z1,z2
-      real(8) :: x,y,z
-!-!         real(8), external :: lafun
+      real(dp) :: res
+      real(dp) :: u,v,w,gam,dx,dy,dz
+      real(dp) :: x1,x2,y1,y2,z1,z2
+      real(dp) :: x,y,z
+!-!         real(dp), external :: lafun
       x1=u-0.5d0*dx
       x2=u+0.5d0*dx
       y1=v-0.5d0*dy
@@ -547,8 +550,8 @@ end subroutine
       function lafun(x,y,z) result(res)
 ! lafun is the function involving log and atan in the PRSTAB paper (I should find a better name for this function)
       implicit none
-      real(8) :: res
-      real(8) :: x,y,z,r
+      real(dp) :: res
+      real(dp) :: x,y,z,r
       r=sqrt(x**2+y**2+z**2)
       res=-0.5d0*z**2*atan(x*y/(z*r))-0.5d0*y**2*atan(x*z/(y*r))-0.5d0*x**2*atan(y*z/(x*r)) &
      &    +y*z*log(x+r)+x*z*log(y+r)+x*y*log(z+r)
@@ -560,13 +563,13 @@ end subroutine
 !+
       function igfexfun(u,v,w,gam,dx,dy,dz) result(res)
       implicit none
-      real(8) :: res
-      real(8) :: u,v,w,gam,dx,dy,dz
-      real(8) :: x1,x2,y1,y2,z1,z2
-      real(8) :: x,y,z
-      real(8), parameter :: ep=1.d-10 !-13 causes NaN's
-      real(8), parameter :: em=-1.d-10
-!-!         real(8), external :: xlafun
+      real(dp) :: res
+      real(dp) :: u,v,w,gam,dx,dy,dz
+      real(dp) :: x1,x2,y1,y2,z1,z2
+      real(dp) :: x,y,z
+      real(dp), parameter :: ep=1.d-10 !-13 causes NaN's
+      real(dp), parameter :: em=-1.d-10
+!-!         real(dp), external :: xlafun
       x1=u-0.5d0*dx
       x2=u+0.5d0*dx
       y1=v-0.5d0*dy
@@ -594,12 +597,12 @@ end subroutine
 !+
       function igfeyfun(u,v,w,gam,dx,dy,dz) result(res)
       implicit none
-      real(8) :: res
-      real(8) :: u,v,w,gam,dx,dy,dz
-      real(8) :: x1,x2,y1,y2,z1,z2
-      real(8) :: x,y,z
-      real(8), parameter :: ep=1.d-10 !should include em also, but probably doesn't matter
-!-!         real(8), external :: ylafun
+      real(dp) :: res
+      real(dp) :: u,v,w,gam,dx,dy,dz
+      real(dp) :: x1,x2,y1,y2,z1,z2
+      real(dp) :: x,y,z
+      real(dp), parameter :: ep=1.d-10 !should include em also, but probably doesn't matter
+!-!         real(dp), external :: ylafun
       x1=u-0.5d0*dx
       x2=u+0.5d0*dx
       y1=v-0.5d0*dy
@@ -627,12 +630,12 @@ end subroutine
 !+ 
       function igfezfun(u,v,w,gam,dx,dy,dz) result(res)
       implicit none
-      real(8) :: res
-      real(8) :: u,v,w,gam,dx,dy,dz
-      real(8) :: x1,x2,y1,y2,z1,z2
-      real(8) :: x,y,z
-      real(8), parameter :: ep=1.d-10 !should include em also, but probably doesn't matter
-!-!         real(8), external :: zlafun
+      real(dp) :: res
+      real(dp) :: u,v,w,gam,dx,dy,dz
+      real(dp) :: x1,x2,y1,y2,z1,z2
+      real(dp) :: x,y,z
+      real(dp), parameter :: ep=1.d-10 !should include em also, but probably doesn't matter
+!-!         real(dp), external :: zlafun
       x1=u-0.5d0*dx
       x2=u+0.5d0*dx
       y1=v-0.5d0*dy
@@ -660,8 +663,8 @@ end subroutine
 !+
       function xlafun(x,y,z) result(res)
       implicit none
-      real(8) :: res
-      real(8) :: x,y,z,r
+      real(dp) :: res
+      real(dp) :: x,y,z,r
       r=sqrt(x**2+y**2+z**2)
     !  if (z+r == 0 ) print *, 'ERROR:x, r, x+r', x, y, z,r, x+r
     !  if (y+r == 0 ) print *, 'ERROR:y, r, y+r', x, y, z,r, y+r
@@ -680,8 +683,8 @@ end subroutine
 !+
       function ylafun(x,y,z) result(res)
       implicit none
-      real(8) :: res
-      real(8) :: x,y,z,r
+      real(dp) :: res
+      real(dp) :: x,y,z,r
       r=sqrt(x**2+y**2+z**2)
 !res=x-y*atan(x/y)+y*atan(z*x/(y*r))-x*log(z+r)-z*log(x+r)
       res=x-y*atan(x/y)+y*atan(z*x/(y*r))
@@ -695,8 +698,8 @@ end subroutine
 !+
       function zlafun(x,y,z) result(res)
       implicit none
-      real(8) :: res
-      real(8) :: x,y,z,r
+      real(dp) :: res
+      real(dp) :: x,y,z,r
       r=sqrt(x**2+y**2+z**2)
 !res=y-z*atan(y/z)+z*atan(x*y/(z*r))-y*log(x+r)-x*log(y+r)
       res=y-z*atan(y/z)+z*atan(x*y/(z*r))
@@ -713,32 +716,32 @@ end subroutine
 
       subroutine get_rho_and_mesh_spacing(xa,ya,za,lostflag, rho,dx,dy,dz,xmin,ymin,zmin,chrgpermacro,ilo,ihi,jlo,jhi,klo,khi, &
      & ilo_gbl,ihi_gbl,jlo_gbl,jhi_gbl,klo_gbl,khi_gbl,idecomp,npx,npy,npz,n1,nraysp,maxrayp)
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     USE mpi
-#endif
+!-!#endif
       implicit none
       
       integer :: ilo,ihi,jlo,jhi,klo,khi,ilo_gbl,ihi_gbl,jlo_gbl,jhi_gbl,klo_gbl,khi_gbl,idecomp,npx,npy,npz,n1,nraysp,maxrayp
-      real(8) :: dx,dy,dz,xmin,ymin,zmin,chrgpermacro
-      !-! real(8), dimension(maxrayp,n1) :: ptcls
+      real(dp) :: dx,dy,dz,xmin,ymin,zmin,chrgpermacro
+      !-! real(dp), dimension(maxrayp,n1) :: ptcls
       !type (coord_struct) :: ptcls(maxrayp)
-      real(8), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
+      real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
 !
-      real(8), dimension(maxrayp) :: xa,ya,za,lostflag !lostflag=1.0 if particle is "lost"
-      real(8) :: xmax,ymax,zmax !not needed
+      real(dp), dimension(maxrayp) :: xa,ya,za,lostflag !lostflag=1.0 if particle is "lost"
+      real(dp) :: xmax,ymax,zmax !not needed
       integer :: ifail,n
       integer :: mprocs,myrank,ierr
-      real(8) :: xsml,xbig,ysml,ybig,zsml,zbig
-!     real(8), parameter :: eps=2.d-15   !3.34d-16 is OK on my Mac
-      real(8), parameter :: eps=0.5d0
+      real(dp) :: xsml,xbig,ysml,ybig,zsml,zbig
+!     real(dp), parameter :: eps=2.d-15   !3.34d-16 is OK on my Mac
+      real(dp), parameter :: eps=0.5d0
       integer :: nx,ny,nz !temporaries
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
 !     call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
-#else
+!-!#else
       mprocs=1
       myrank=0
-#endif
+!-!#endif
 !     if(myrank.eq.0)write(6,*)'hello from get_rho'
       !xa(1:maxrayp)=ptcls(:)%vec(1) !-! ptcls(1:maxrayp,1)
       !ya(1:maxrayp)=ptcls(:)%vec(3) !-! ptcls(1:maxrayp,3)
@@ -763,7 +766,7 @@ end subroutine
       zmin=zsml-dz; zmax=zbig+dz
 !
 !
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 ! move particles to the correct proc:
 !     ptcls(1,1:nraysp)=xa(1:nraysp)
 !     ptcls(2,1:nraysp)=ya(1:nraysp)
@@ -776,7 +779,7 @@ end subroutine
 !     xa(1:nraysp)=ptcls(1,1:nraysp)
 !     ya(1:nraysp)=ptcls(2,1:nraysp)
 !     za(1:nraysp)=ptcls(3,1:nraysp)
-#endif
+!-!#endif
       lostflag(1:maxrayp)=1.d0
       lostflag(1:nraysp)=0.d0    !all particles are included in this example run
       call depose_rho_scalar(xa,ya,za,lostflag,rho,chrgpermacro,ilo,ihi,jlo,jhi,klo,khi,dx,dy,dz,xmin,ymin,zmin,nraysp, &
@@ -793,16 +796,16 @@ end subroutine
 !+
 
       subroutine getbeamboundingbox(x,y,z,lostflag,xmin,xmax,ymin,ymax,zmin,zmax,nraysp)
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     USE mpi
-#endif
+!-!#endif
       implicit none
-      integer :: nraysp !# of particles per MPI process
-      real(8), dimension(*) :: x,y,z,lostflag !lostflag=1.0 if particle is "lost"
-      real(8) :: xmin,xmax,ymin,ymax,zmin,zmax
-      real(8), dimension(6) :: veclcl,vecgbl
-      real(8) :: xminlcl,xmaxlcl,yminlcl,ymaxlcl,zminlcl,zmaxlcl
-      real(8) :: xwidthorig,ywidthorig,zwidthorig
+      integer :: nraysp !!-!# of particles per MPI process
+      real(dp), dimension(*) :: x,y,z,lostflag !lostflag=1.0 if particle is "lost"
+      real(dp) :: xmin,xmax,ymin,ymax,zmin,zmax
+      real(dp), dimension(6) :: veclcl,vecgbl
+      real(dp) :: xminlcl,xmaxlcl,yminlcl,ymaxlcl,zminlcl,zmaxlcl
+      real(dp) :: xwidthorig,ywidthorig,zwidthorig
       integer :: ierror
 !need this since, if nraysp=0, the next 6 statements are skipped
       veclcl(1:3)=-9999999.
@@ -821,11 +824,11 @@ end subroutine
       veclcl(5)=maxval(y(1:nraysp))
       veclcl(6)=maxval(z(1:nraysp))
   100 continue
-#ifdef MPIPARALLEL
+!-!#ifdef MPIPARALLEL
 !     call MPI_ALLREDUCE(veclcl,vecgbl,6,MPI_DOUBLE_PRECISION,MPI_MAX,MPI_COMM_WORLD,ierror)
-#else
+!-!#else
       vecgbl(1:6)=veclcl(1:6)
-#endif
+!-!#endif
       xmin=-vecgbl(1)
       ymin=-vecgbl(2)
       zmin=-vecgbl(3)
@@ -843,8 +846,8 @@ end subroutine
 subroutine ccfft3d(a,b,idir,n1,n2,n3,iskiptrans)
       implicit none
       integer, dimension(3) :: idir
-      complex*16, dimension(n1,n2,n3) :: a,b
-      complex*16, allocatable :: tmp1(:,:,:), tmp2(:,:,:)
+      complex(dp), dimension(:,:,:) :: a,b
+      complex(dp), allocatable :: tmp1(:,:,:), tmp2(:,:,:)
       integer :: n1,n2,n3
       integer :: iskiptrans
       integer :: ileft,iright,i,j,k
@@ -900,7 +903,7 @@ subroutine ccfft3d(a,b,idir,n1,n2,n3,iskiptrans)
 !+
       subroutine mccfft1d(a,ntot,lenfft,idir)
       implicit none
-      complex*16, dimension(*) :: a
+      complex(dp), dimension(*) :: a
       integer :: ntot,lenfft,idir
       integer :: n
       do n=1,ntot*lenfft,lenfft
@@ -918,10 +921,10 @@ subroutine ccfft3d(a,b,idir,n1,n2,n3,iskiptrans)
       subroutine ccfftnr(cdata,nn,isign)
       implicit none
       integer nn,isign,i,j,n,m,istep,mmax
-      complex*16 cdata
-      real(8) data
+      complex(dp) cdata
+      real(dp) data
       dimension cdata(nn),data(2*nn)
-      real(8) tempi,tempr,theta,wpr,wpi,wr,wi,wtemp,twopi
+      real(dp) tempi,tempr,theta,wpr,wpi,wr,wi,wtemp,twopi
       do i=1,nn
         data(2*i-1)=real(cdata(i))
         data(2*i) =aimag(cdata(i))

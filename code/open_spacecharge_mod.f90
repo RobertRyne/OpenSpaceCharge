@@ -87,12 +87,19 @@ end subroutine
 !------------------------------------------------------------------------
 !+
 
-subroutine space_charge_field_calc(mesh3d)
+subroutine space_charge_field_calc(mesh3d, direct_field_calc, integrated_green_function)
 type(mesh3d_struct) :: mesh3d
 real(dp) :: gamma0
 integer, parameter :: idecomp = 999, npx=999, npy=999, npz = 999
-integer, parameter :: idirectfieldcalc=1 ! =0 to compute phi and use finite differences for E; =1 to compute E directly
-integer, parameter :: igfflag=1 ! =0 for ordinary Green function; =1 for integrated Green function
+integer :: idirectfieldcalc=1 
+integer :: igfflag=1 
+logical, optional :: direct_field_calc, integrated_green_function
+
+idirectfieldcalc=1 ! =0 to compute phi and use finite differences for E; =1 to compute E directly
+if(present(direct_field_calc) .and. .not. direct_field_calc)idirectfieldcalc=0
+
+igfflag=1 ! =0 for ordinary Green function; =1 for integrated Green function
+if(present(integrated_green_function) .and. .not. integrated_green_function) igfflag = 0
 
 
 call getfields(mesh3d%charge, mesh3d%gamma, &
@@ -334,66 +341,67 @@ end subroutine
 !------------------------------------------------------------------------
 !+
 
-      subroutine openbcpotential(rho,phi,gam,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &           ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+subroutine openbcpotential(rho,phi,gam,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+                           ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl, &
+                           idecomp,npx,npy,npz,icomp,igfflag,ierr)
 !-!#ifdef MPIPARALLEL
 !     USE mpi
 !-!#endif
-      implicit none
-      real(dp) :: gam,dx,dy,dz
-      integer :: ilo,ihi,jlo,jhi,klo,khi
-      integer :: ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr
-      real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho,phi
+implicit none
+real(dp) :: gam,dx,dy,dz
+integer :: ilo,ihi,jlo,jhi,klo,khi
+integer :: ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr
+real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho,phi
 !
-      complex(dp), allocatable, dimension(:,:,:) :: crho2,ctmp2,cphi2,cgrn1 !what is the "1" for in cgrn1?
-      integer :: ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl
-      integer :: ilo_phi_gbl,ihi_phi_gbl,jlo_phi_gbl,jhi_phi_gbl,klo_phi_gbl,khi_phi_gbl
-      integer :: ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl
-      integer :: ilo2,ihi2,jlo2,jhi2,klo2,khi2
-      integer :: iloo,ihii,jloo,jhii,kloo,khii
-      integer :: iperiod,jperiod,kperiod,n
-      integer :: idecomp_in,idecomp_out,idirection,ipermute,iscale
-      integer :: in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi
-      integer :: out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi
-      real(dp) :: time
-      integer :: i,j,k,ip,jp,kp,ndx
-      real(dp) :: u,v,w,gval
+complex(dp), allocatable, dimension(:,:,:) :: crho2,ctmp2,cphi2,cgrn1 !what is the "1" for in cgrn1?
+integer :: ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl
+integer :: ilo_phi_gbl,ihi_phi_gbl,jlo_phi_gbl,jhi_phi_gbl,klo_phi_gbl,khi_phi_gbl
+integer :: ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl
+integer :: ilo2,ihi2,jlo2,jhi2,klo2,khi2
+integer :: iloo,ihii,jloo,jhii,kloo,khii
+integer :: iperiod,jperiod,kperiod,n
+integer :: idecomp_in,idecomp_out,idirection,ipermute,iscale
+integer :: in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi
+integer :: out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi
+real(dp) :: time
+integer :: i,j,k,ip,jp,kp,ndx
+real(dp) :: u,v,w,gval
 !-!   real(dp), external :: coulombfun,igfcoulombfun !I prefer not to have an external directive, alternative is to use a module
 !-!   real(dp), external :: igfexfun,igfeyfun,igfezfun
-      integer :: mprocs,myrank
-      real(dp), parameter :: econst=299792458.d0**2*1.d-7
+integer :: mprocs,myrank
+real(dp), parameter :: econst=299792458.d0**2*1.d-7
 !-!#ifdef MPIPARALLEL
 !     call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
 !     call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 !-!#else
-      mprocs=1
-      myrank=0
+mprocs=1
+myrank=0
 !-!#endif
 !
-      ilo_rho2_gbl=ilo_rho_gbl
-      jlo_rho2_gbl=jlo_rho_gbl
-      klo_rho2_gbl=jlo_rho_gbl
-      ihi_rho2_gbl=ilo_rho2_gbl+2*(ihi_rho_gbl-ilo_rho_gbl+1)-1
-      jhi_rho2_gbl=jlo_rho2_gbl+2*(jhi_rho_gbl-jlo_rho_gbl+1)-1
-      khi_rho2_gbl=klo_rho2_gbl+2*(khi_rho_gbl-klo_rho_gbl+1)-1
+ilo_rho2_gbl=ilo_rho_gbl
+jlo_rho2_gbl=jlo_rho_gbl
+klo_rho2_gbl=jlo_rho_gbl
+ihi_rho2_gbl=ilo_rho2_gbl+2*(ihi_rho_gbl-ilo_rho_gbl+1)-1
+jhi_rho2_gbl=jlo_rho2_gbl+2*(jhi_rho_gbl-jlo_rho_gbl+1)-1
+khi_rho2_gbl=klo_rho2_gbl+2*(khi_rho_gbl-klo_rho_gbl+1)-1
 !
-      ilo_phi_gbl=ilo_rho_gbl
-      ihi_phi_gbl=ihi_rho_gbl
-      jlo_phi_gbl=jlo_rho_gbl
-      jhi_phi_gbl=jhi_rho_gbl
-      klo_phi_gbl=klo_rho_gbl
-      khi_phi_gbl=khi_rho_gbl
+ilo_phi_gbl=ilo_rho_gbl
+ihi_phi_gbl=ihi_rho_gbl
+jlo_phi_gbl=jlo_rho_gbl
+jhi_phi_gbl=jhi_rho_gbl
+klo_phi_gbl=klo_rho_gbl
+khi_phi_gbl=khi_rho_gbl
 !
-      ilo_grn_gbl=ilo_phi_gbl-ihi_rho_gbl
-      ihi_grn_gbl=ihi_phi_gbl-ilo_rho_gbl+1 !+1 is padding
-      jlo_grn_gbl=jlo_phi_gbl-jhi_rho_gbl
-      jhi_grn_gbl=jhi_phi_gbl-jlo_rho_gbl+1 !+1 is padding
-      klo_grn_gbl=klo_phi_gbl-khi_rho_gbl
-      khi_grn_gbl=khi_phi_gbl-klo_rho_gbl+1 !+1 is padding
+ilo_grn_gbl=ilo_phi_gbl-ihi_rho_gbl
+ihi_grn_gbl=ihi_phi_gbl-ilo_rho_gbl+1 !+1 is padding
+jlo_grn_gbl=jlo_phi_gbl-jhi_rho_gbl
+jhi_grn_gbl=jhi_phi_gbl-jlo_rho_gbl+1 !+1 is padding
+klo_grn_gbl=klo_phi_gbl-khi_rho_gbl
+khi_grn_gbl=khi_phi_gbl-klo_rho_gbl+1 !+1 is padding
 !
-      iperiod=ihi_rho2_gbl-ilo_rho2_gbl+1
-      jperiod=jhi_rho2_gbl-jlo_rho2_gbl+1
-      kperiod=khi_rho2_gbl-klo_rho2_gbl+1
+iperiod=ihi_rho2_gbl-ilo_rho2_gbl+1
+jperiod=jhi_rho2_gbl-jlo_rho2_gbl+1
+kperiod=khi_rho2_gbl-klo_rho2_gbl+1
 !
 !allocate the double-size complex array crho2:
 !-!#ifdef MPIPARALLEL
@@ -402,17 +410,17 @@ end subroutine
 !-!#else
       ilo2=ilo_rho2_gbl;ihi2=ihi_rho2_gbl; jlo2=jlo_rho2_gbl;jhi2=jhi_rho2_gbl; klo2=klo_rho2_gbl;khi2=khi_rho2_gbl
 !-!#endif
-      allocate(crho2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
-      allocate(ctmp2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
-      allocate(cphi2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
+allocate(crho2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
+allocate(ctmp2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
+allocate(cphi2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
 !
 !store rho in a double-size complex array:
 !-!#ifdef MPIPARALLEL
 !     call movetodoublesizer2c(rho,crho2,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2, &
 !    &                         ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz)
 !-!#else
-      crho2(:,:,:)=0.d0
-      crho2(ilo:ihi,jlo:jhi,klo:khi)=rho(ilo:ihi,jlo:jhi,klo:khi)
+crho2(:,:,:)=0.d0
+crho2(ilo:ihi,jlo:jhi,klo:khi)=rho(ilo:ihi,jlo:jhi,klo:khi)
 !-!#endif
 !
 !-!#ifdef MPIPARALLEL
@@ -437,37 +445,37 @@ end subroutine
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
 !-!#else
-      call ccfft3d(crho2,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
+call ccfft3d(crho2,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
 !-!#endif
-      crho2(:,:,:)=ctmp2(:,:,:)  !now ctmp2 can be reused for next fft
+crho2(:,:,:)=ctmp2(:,:,:)  !now ctmp2 can be reused for next fft
 !
 ! compute the Green function (called cgrn1 below):
 !-!#ifdef MPIPARALLEL
 !     call decompose(myrank,mprocs,& !why does the following line contain rho2 indices?????
 !    &ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl,idecomp,npx,npy,npz,iloo,ihii,jloo,jhii,kloo,khii)
 !-!#else
-      iloo=ilo_grn_gbl;ihii=ihi_grn_gbl; jloo=jlo_grn_gbl;jhii=jhi_grn_gbl; kloo=klo_grn_gbl;khii=khi_grn_gbl
+iloo=ilo_grn_gbl;ihii=ihi_grn_gbl; jloo=jlo_grn_gbl;jhii=jhi_grn_gbl; kloo=klo_grn_gbl;khii=khi_grn_gbl
 !-!#endif
-      allocate(cgrn1(iloo:ihii,jloo:jhii,kloo:khii))
+allocate(cgrn1(iloo:ihii,jloo:jhii,kloo:khii))
 !     write(6,*)'igfflag,icomp=',igfflag,icomp
-      do k=kloo,khii
-        kp=klo_grn_gbl+mod(k-klo_grn_gbl+kperiod/2-1,kperiod)
-        w=kp*dz
-        do j=jloo,jhii
-          jp=jlo_grn_gbl+mod(j-jlo_grn_gbl+jperiod/2-1,jperiod)
-          v=jp*dy
-         do i=iloo,ihii
-           ip=ilo_grn_gbl+mod(i-ilo_grn_gbl+iperiod/2-1,iperiod)
-           u=ip*dx
-           if(igfflag.eq.0.and.icomp.eq.0)gval=coulombfun(u,v,w,gam)
-           if(igfflag.eq.1.and.icomp.eq.0)gval=igfcoulombfun(u,v,w,gam,dx,dy,dz)
-           if(igfflag.eq.1.and.icomp.eq.1)gval=igfexfun(u,v,w,gam,dx,dy,dz)
-           if(igfflag.eq.1.and.icomp.eq.2)gval=igfeyfun(u,v,w,gam,dx,dy,dz)
-           if(igfflag.eq.1.and.icomp.eq.3)gval=igfezfun(u,v,w,gam,dx,dy,dz)
-           cgrn1(i,j,k)= cmplx(gval,0.d0, dp)
-          enddo
-        enddo
-      enddo
+do k=kloo,khii
+  kp=klo_grn_gbl+mod(k-klo_grn_gbl+kperiod/2-1,kperiod)
+  w=kp*dz
+  do j=jloo,jhii
+    jp=jlo_grn_gbl+mod(j-jlo_grn_gbl+jperiod/2-1,jperiod)
+    v=jp*dy
+   do i=iloo,ihii
+     ip=ilo_grn_gbl+mod(i-ilo_grn_gbl+iperiod/2-1,iperiod)
+     u=ip*dx
+     if(igfflag.eq.0.and.icomp.eq.0)gval=coulombfun(u,v,w,gam)
+     if(igfflag.eq.1.and.icomp.eq.0)gval=igfcoulombfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.1)gval=igfexfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.2)gval=igfeyfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.3)gval=igfezfun(u,v,w,gam,dx,dy,dz)
+     cgrn1(i,j,k)= cmplx(gval,0.d0, dp)
+    enddo
+  enddo
+enddo
       
 ! fft the Green function:
 !-!#ifdef MPIPARALLEL
@@ -476,10 +484,10 @@ end subroutine
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
 !-!# else
-      call ccfft3d(cgrn1,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
+call ccfft3d(cgrn1,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
 !-!#endif
 ! multiply the fft'd charge density and green function:
-      cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
+cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
 ! now do the inverse fft:
       idirection=-1
 !-!#ifdef MPIPARALLEL
@@ -488,225 +496,255 @@ end subroutine
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
 !-!#else
-      call ccfft3d(cphi2,ctmp2,[-1,-1,-1],iperiod,jperiod,kperiod,0)
+call ccfft3d(cphi2,ctmp2,[-1,-1,-1],iperiod,jperiod,kperiod,0)
 !-!#endif
-      cphi2(:,:,:)=ctmp2(:,:,:)/((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod))
+cphi2(:,:,:)=ctmp2(:,:,:)/((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod))
 !
 !store the physical portion of the double-size complex array in a non-double-size real array:
 !-!#ifdef MPIPARALLEL
 !     call movetosinglesizec2r(cphi2,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo,ihi,jlo,jhi,klo,khi, &
 !    &                         ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz)
 !-!#else
-      phi(ilo:ihi,jlo:jhi,klo:khi)=real(cphi2(ilo:ihi,jlo:jhi,klo:khi), dp)
-      phi(ilo:ihi,jlo:jhi,klo:khi)=phi(ilo:ihi,jlo:jhi,klo:khi)*econst
+phi(ilo:ihi,jlo:jhi,klo:khi)=real(cphi2(ilo:ihi,jlo:jhi,klo:khi), dp)
+phi(ilo:ihi,jlo:jhi,klo:khi)=phi(ilo:ihi,jlo:jhi,klo:khi)*econst
 !-!#endif
-      return
-      end
+
+end subroutine
 !
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-      function coulombfun(u,v,w,gam) result(res)
-      implicit none
-      real(dp) :: res
-      real(dp) :: u,v,w,gam
-      if(u.eq.0.d0 .and. v.eq.0.d0 .and. w.eq.0.d0)then
-        res=0.d0
-      return
-      endif
-      res=1.d0/sqrt(u**2+v**2+(gam*w)**2)  !coulomb
+ function coulombfun(u,v,w,gam) result(res)
+ implicit none
+ real(dp) :: res
+ real(dp) :: u,v,w,gam
+ if(u.eq.0.d0 .and. v.eq.0.d0 .and. w.eq.0.d0)then
+   res=0.d0
+   return
+ endif
+ res=1.d0/sqrt(u**2+v**2+(gam*w)**2)  !coulomb
 !     res=u/(u**2+v**2+(gam*w)**2)**1.5d0  !x-electric field
-      return
-      end function coulombfun
+ return
+ end function coulombfun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-      function igfcoulombfun(u,v,w,gam,dx,dy,dz) result(res)
-      implicit none
-      real(dp) :: res
-      real(dp) :: u,v,w,gam,dx,dy,dz
-      real(dp) :: x1,x2,y1,y2,z1,z2
-      real(dp) :: x,y,z
+function igfcoulombfun(u,v,w,gam,dx,dy,dz) result(res)
+implicit none
+real(dp) :: res
+real(dp) :: u,v,w,gam,dx,dy,dz
+real(dp) :: x1,x2,y1,y2,z1,z2
+real(dp) :: x,y,z
 !-!         real(dp), external :: lafun
-      x1=u-0.5d0*dx
-      x2=u+0.5d0*dx
-      y1=v-0.5d0*dy
-      y2=v+0.5d0*dy
-      z1=(w-0.5d0*dz)*gam
-      z2=(w+0.5d0*dz)*gam
+x1=u-0.5d0*dx
+x2=u+0.5d0*dx
+y1=v-0.5d0*dy
+y2=v+0.5d0*dy
+z1=(w-0.5d0*dz)*gam
+z2=(w+0.5d0*dz)*gam
 !     res=1.d0/sqrt(u**2+v**2+w**2)  !coulomb
 !     res=u/(u**2+v**2+w**2)**1.5d0  !x-electric field
-      res=lafun(x2,y2,z2)-lafun(x1,y2,z2)-lafun(x2,y1,z2)-lafun(x2,y2,z1)-lafun(x1,y1,z1)+ &
-     &    lafun(x1,y1,z2)+lafun(x1,y2,z1)+lafun(x2,y1,z1)
-      res=res/(dx*dy*dz*gam)
-      return
-      end function igfcoulombfun
+res=lafun(x2,y2,z2)-lafun(x1,y2,z2)-lafun(x2,y1,z2)-lafun(x2,y2,z1)-lafun(x1,y1,z1)+ &
+    lafun(x1,y1,z2)+lafun(x1,y2,z1)+lafun(x2,y1,z1)
+res=res/(dx*dy*dz*gam)
+
+end function igfcoulombfun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-      function lafun(x,y,z) result(res)
+function lafun(x,y,z) result(res)
 ! lafun is the function involving log and atan in the PRSTAB paper (I should find a better name for this function)
-      implicit none
-      real(dp) :: res
-      real(dp) :: x,y,z,r
-      r=sqrt(x**2+y**2+z**2)
-      res=-0.5d0*z**2*atan(x*y/(z*r))-0.5d0*y**2*atan(x*z/(y*r))-0.5d0*x**2*atan(y*z/(x*r)) &
-     &    +y*z*log(x+r)+x*z*log(y+r)+x*y*log(z+r)
-      return
-      end function lafun
+implicit none
+real(dp) :: res
+real(dp) :: x,y,z,r
+r=sqrt(x**2+y**2+z**2)
+res=-0.5d0*z**2*atan(x*y/(z*r))-0.5d0*y**2*atan(x*z/(y*r))-0.5d0*x**2*atan(y*z/(x*r)) &
+     +y*z*log(x+r)+x*z*log(y+r)+x*y*log(z+r)
+
+end function lafun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-      function igfexfun(u,v,w,gam,dx,dy,dz) result(res)
-      implicit none
-      real(dp) :: res
-      real(dp) :: u,v,w,gam,dx,dy,dz
-      real(dp) :: x1,x2,y1,y2,z1,z2
-      real(dp) :: x,y,z
-      real(dp), parameter :: ep=1.d-10 !-13 causes NaN's
-      real(dp), parameter :: em=-1.d-10
+function igfexfun(u,v,w,gam,dx,dy,dz) result(res)
+implicit none
+real(dp) :: res
+real(dp) :: u,v,w,gam,dx,dy,dz
+real(dp) :: x1,x2,y1,y2,z1,z2
+real(dp) :: x,y,z
+real(dp), parameter :: ep=1.d-10 !-13 causes NaN's
+real(dp), parameter :: em=-1.d-10
 !-!         real(dp), external :: xlafun
-      x1=u-0.5d0*dx
-      x2=u+0.5d0*dx
-      y1=v-0.5d0*dy
-      y2=v+0.5d0*dy
-      z1=(w-0.5d0*dz)*gam
-      z2=(w+0.5d0*dz)*gam
-      if(x1<0.d0.and.x2>0.d0.and.y1<0.d0.and.y2>0.d0.and.z1<0.d0.and.z2>0.d0)then
-        res=xlafun(em,em,em)-xlafun(x1,em,em)-xlafun(em,y1,em)-xlafun(em,em,z1)-xlafun(x1,y1,z1)+xlafun(x1,y1,em)+xlafun(x1,em,z1)+xlafun(em,y1,z1) &
-     &     +xlafun(x2,em,em)-xlafun(ep,em,em)-xlafun(x2,y1,em)-xlafun(x2,em,z1)-xlafun(ep,y1,z1)+xlafun(ep,y1,em)+xlafun(ep,em,z1)+xlafun(x2,y1,z1) &
-     &     +xlafun(ep,y2,ep)-xlafun(x1,y2,ep)-xlafun(ep,ep,ep)-xlafun(ep,y2,z1)-xlafun(x1,ep,z1)+xlafun(x1,ep,ep)+xlafun(x1,y2,z1)+xlafun(ep,ep,z1) &
-     &     +xlafun(ep,ep,z2)-xlafun(x1,ep,z2)-xlafun(ep,y1,z2)-xlafun(ep,ep,ep)-xlafun(x1,y1,ep)+xlafun(x1,y1,z2)+xlafun(x1,ep,ep)+xlafun(ep,y1,ep) &
-     &     +xlafun(x2,y2,ep)-xlafun(ep,y2,ep)-xlafun(x2,ep,ep)-xlafun(x2,y2,z1)-xlafun(ep,ep,z1)+xlafun(ep,ep,ep)+xlafun(ep,y2,z1)+xlafun(x2,ep,z1) &
-     &     +xlafun(x2,ep,z2)-xlafun(ep,ep,z2)-xlafun(x2,y1,z2)-xlafun(x2,ep,ep)-xlafun(ep,y1,ep)+xlafun(ep,y1,z2)+xlafun(ep,ep,ep)+xlafun(x2,y1,ep) &
-     &     +xlafun(ep,y2,z2)-xlafun(x1,y2,z2)-xlafun(ep,ep,z2)-xlafun(ep,y2,ep)-xlafun(x1,ep,ep)+xlafun(x1,ep,z2)+xlafun(x1,y2,ep)+xlafun(ep,ep,ep) &
-     &     +xlafun(x2,y2,z2)-xlafun(ep,y2,z2)-xlafun(x2,ep,z2)-xlafun(x2,y2,ep)-xlafun(ep,ep,ep)+xlafun(ep,ep,z2)+xlafun(ep,y2,ep)+xlafun(x2,ep,ep)
-      else
-        res=xlafun(x2,y2,z2)-xlafun(x1,y2,z2)-xlafun(x2,y1,z2)-xlafun(x2,y2,z1)-xlafun(x1,y1,z1)+xlafun(x1,y1,z2)+xlafun(x1,y2,z1)+xlafun(x2,y1,z1)
-      endif
-      res=res/(dx*dy*dz)
-      return
-      end function igfexfun
+x1=u-0.5d0*dx
+x2=u+0.5d0*dx
+y1=v-0.5d0*dy
+y2=v+0.5d0*dy
+z1=(w-0.5d0*dz)*gam
+z2=(w+0.5d0*dz)*gam
+if(x1<0.d0.and.x2>0.d0.and.y1<0.d0.and.y2>0.d0.and.z1<0.d0.and.z2>0.d0)then
+  res=xlafun(em,em,em) &
+     -xlafun(x1,em,em)-xlafun(em,y1,em)-xlafun(em,em,z1)-xlafun(x1,y1,z1) &
+     +xlafun(x1,y1,em)+xlafun(x1,em,z1)+xlafun(em,y1,z1)+xlafun(x2,em,em) &
+     -xlafun(ep,em,em)-xlafun(x2,y1,em)-xlafun(x2,em,z1)-xlafun(ep,y1,z1) &
+     +xlafun(ep,y1,em)+xlafun(ep,em,z1)+xlafun(x2,y1,z1)+xlafun(ep,y2,ep) &
+     -xlafun(x1,y2,ep)-xlafun(ep,ep,ep)-xlafun(ep,y2,z1)-xlafun(x1,ep,z1) &
+     +xlafun(x1,ep,ep)+xlafun(x1,y2,z1)+xlafun(ep,ep,z1)+xlafun(ep,ep,z2) &
+     -xlafun(x1,ep,z2)-xlafun(ep,y1,z2)-xlafun(ep,ep,ep)-xlafun(x1,y1,ep) &
+     +xlafun(x1,y1,z2)+xlafun(x1,ep,ep)+xlafun(ep,y1,ep)+xlafun(x2,y2,ep) &
+     -xlafun(ep,y2,ep)-xlafun(x2,ep,ep)-xlafun(x2,y2,z1)-xlafun(ep,ep,z1) &
+     +xlafun(ep,ep,ep)+xlafun(ep,y2,z1)+xlafun(x2,ep,z1)+xlafun(x2,ep,z2) &
+     -xlafun(ep,ep,z2)-xlafun(x2,y1,z2)-xlafun(x2,ep,ep)-xlafun(ep,y1,ep) &
+     +xlafun(ep,y1,z2)+xlafun(ep,ep,ep)+xlafun(x2,y1,ep)+xlafun(ep,y2,z2) &
+     -xlafun(x1,y2,z2)-xlafun(ep,ep,z2)-xlafun(ep,y2,ep)-xlafun(x1,ep,ep) &
+     +xlafun(x1,ep,z2)+xlafun(x1,y2,ep)+xlafun(ep,ep,ep)+xlafun(x2,y2,z2) &
+     -xlafun(ep,y2,z2)-xlafun(x2,ep,z2)-xlafun(x2,y2,ep)-xlafun(ep,ep,ep) &
+     +xlafun(ep,ep,z2)+xlafun(ep,y2,ep)+xlafun(x2,ep,ep)
+else
+  res=xlafun(x2,y2,z2)-xlafun(x1,y2,z2)-xlafun(x2,y1,z2)-xlafun(x2,y2,z1) &
+      -xlafun(x1,y1,z1)+xlafun(x1,y1,z2)+xlafun(x1,y2,z1)+xlafun(x2,y1,z1)
+endif
+res=res/(dx*dy*dz)
+return
+end function igfexfun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-      function igfeyfun(u,v,w,gam,dx,dy,dz) result(res)
-      implicit none
-      real(dp) :: res
-      real(dp) :: u,v,w,gam,dx,dy,dz
-      real(dp) :: x1,x2,y1,y2,z1,z2
-      real(dp) :: x,y,z
-      real(dp), parameter :: ep=1.d-10 !should include em also, but probably doesn't matter
+function igfeyfun(u,v,w,gam,dx,dy,dz) result(res)
+implicit none
+real(dp) :: res
+real(dp) :: u,v,w,gam,dx,dy,dz
+real(dp) :: x1,x2,y1,y2,z1,z2
+real(dp) :: x,y,z
+real(dp), parameter :: ep=1.d-10 !should include em also, but probably doesn't matter
 !-!         real(dp), external :: ylafun
-      x1=u-0.5d0*dx
-      x2=u+0.5d0*dx
-      y1=v-0.5d0*dy
-      y2=v+0.5d0*dy
-      z1=(w-0.5d0*dz)*gam
-      z2=(w+0.5d0*dz)*gam
-      if(x1<0.d0.and.x2>0.d0.and.y1<0.d0.and.y2>0.d0.and.z1<0.d0.and.z2>0.d0)then
-        res=ylafun(ep,ep,ep)-ylafun(x1,ep,ep)-ylafun(ep,y1,ep)-ylafun(ep,ep,z1)-ylafun(x1,y1,z1)+ylafun(x1,y1,ep)+ylafun(x1,ep,z1)+ylafun(ep,y1,z1) &
-     &     +ylafun(x2,ep,ep)-ylafun(ep,ep,ep)-ylafun(x2,y1,ep)-ylafun(x2,ep,z1)-ylafun(ep,y1,z1)+ylafun(ep,y1,ep)+ylafun(ep,ep,z1)+ylafun(x2,y1,z1) &
-     &     +ylafun(ep,y2,ep)-ylafun(x1,y2,ep)-ylafun(ep,ep,ep)-ylafun(ep,y2,z1)-ylafun(x1,ep,z1)+ylafun(x1,ep,ep)+ylafun(x1,y2,z1)+ylafun(ep,ep,z1) &
-     &     +ylafun(ep,ep,z2)-ylafun(x1,ep,z2)-ylafun(ep,y1,z2)-ylafun(ep,ep,ep)-ylafun(x1,y1,ep)+ylafun(x1,y1,z2)+ylafun(x1,ep,ep)+ylafun(ep,y1,ep) &
-     &     +ylafun(x2,y2,ep)-ylafun(ep,y2,ep)-ylafun(x2,ep,ep)-ylafun(x2,y2,z1)-ylafun(ep,ep,z1)+ylafun(ep,ep,ep)+ylafun(ep,y2,z1)+ylafun(x2,ep,z1) &
-     &     +ylafun(x2,ep,z2)-ylafun(ep,ep,z2)-ylafun(x2,y1,z2)-ylafun(x2,ep,ep)-ylafun(ep,y1,ep)+ylafun(ep,y1,z2)+ylafun(ep,ep,ep)+ylafun(x2,y1,ep) &
-     &     +ylafun(ep,y2,z2)-ylafun(x1,y2,z2)-ylafun(ep,ep,z2)-ylafun(ep,y2,ep)-ylafun(x1,ep,ep)+ylafun(x1,ep,z2)+ylafun(x1,y2,ep)+ylafun(ep,ep,ep) &
-     &     +ylafun(x2,y2,z2)-ylafun(ep,y2,z2)-ylafun(x2,ep,z2)-ylafun(x2,y2,ep)-ylafun(ep,ep,ep)+ylafun(ep,ep,z2)+ylafun(ep,y2,ep)+ylafun(x2,ep,ep)
-      else
-        res=ylafun(x2,y2,z2)-ylafun(x1,y2,z2)-ylafun(x2,y1,z2)-ylafun(x2,y2,z1)-ylafun(x1,y1,z1)+ylafun(x1,y1,z2)+ylafun(x1,y2,z1)+ylafun(x2,y1,z1)
-      endif
-      res=res/(dx*dy*dz)
-      return
-      end function igfeyfun
+x1=u-0.5d0*dx
+x2=u+0.5d0*dx
+y1=v-0.5d0*dy
+y2=v+0.5d0*dy
+z1=(w-0.5d0*dz)*gam
+z2=(w+0.5d0*dz)*gam
+if(x1<0.d0.and.x2>0.d0.and.y1<0.d0.and.y2>0.d0.and.z1<0.d0.and.z2>0.d0)then
+  res=ylafun(ep,ep,ep) &
+     -ylafun(x1,ep,ep)-ylafun(ep,y1,ep)-ylafun(ep,ep,z1)-ylafun(x1,y1,z1) &
+     +ylafun(x1,y1,ep)+ylafun(x1,ep,z1)+ylafun(ep,y1,z1)+ylafun(x2,ep,ep) &
+     -ylafun(ep,ep,ep)-ylafun(x2,y1,ep)-ylafun(x2,ep,z1)-ylafun(ep,y1,z1) &
+     +ylafun(ep,y1,ep)+ylafun(ep,ep,z1)+ylafun(x2,y1,z1)+ylafun(ep,y2,ep) &
+     -ylafun(x1,y2,ep)-ylafun(ep,ep,ep)-ylafun(ep,y2,z1)-ylafun(x1,ep,z1) &
+     +ylafun(x1,ep,ep)+ylafun(x1,y2,z1)+ylafun(ep,ep,z1)+ylafun(ep,ep,z2) &
+     -ylafun(x1,ep,z2)-ylafun(ep,y1,z2)-ylafun(ep,ep,ep)-ylafun(x1,y1,ep) &
+     +ylafun(x1,y1,z2)+ylafun(x1,ep,ep)+ylafun(ep,y1,ep)+ylafun(x2,y2,ep) &
+     -ylafun(ep,y2,ep)-ylafun(x2,ep,ep)-ylafun(x2,y2,z1)-ylafun(ep,ep,z1) &
+     +ylafun(ep,ep,ep)+ylafun(ep,y2,z1)+ylafun(x2,ep,z1)+ylafun(x2,ep,z2) &
+     -ylafun(ep,ep,z2)-ylafun(x2,y1,z2)-ylafun(x2,ep,ep)-ylafun(ep,y1,ep) &
+     +ylafun(ep,y1,z2)+ylafun(ep,ep,ep)+ylafun(x2,y1,ep)+ylafun(ep,y2,z2) &
+     -ylafun(x1,y2,z2)-ylafun(ep,ep,z2)-ylafun(ep,y2,ep)-ylafun(x1,ep,ep) &
+     +ylafun(x1,ep,z2)+ylafun(x1,y2,ep)+ylafun(ep,ep,ep)+ylafun(x2,y2,z2) &
+     -ylafun(ep,y2,z2)-ylafun(x2,ep,z2)-ylafun(x2,y2,ep)-ylafun(ep,ep,ep) &
+     +ylafun(ep,ep,z2)+ylafun(ep,y2,ep)+ylafun(x2,ep,ep)
+else
+  res=ylafun(x2,y2,z2)-ylafun(x1,y2,z2)-ylafun(x2,y1,z2)-ylafun(x2,y2,z1) &
+     -ylafun(x1,y1,z1)+ylafun(x1,y1,z2)+ylafun(x1,y2,z1)+ylafun(x2,y1,z1)
+endif
+
+res=res/(dx*dy*dz)
+
+end function igfeyfun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+ 
-      function igfezfun(u,v,w,gam,dx,dy,dz) result(res)
-      implicit none
-      real(dp) :: res
-      real(dp) :: u,v,w,gam,dx,dy,dz
-      real(dp) :: x1,x2,y1,y2,z1,z2
-      real(dp) :: x,y,z
-      real(dp), parameter :: ep=1.d-10 !should include em also, but probably doesn't matter
+function igfezfun(u,v,w,gam,dx,dy,dz) result(res)
+implicit none
+real(dp) :: res
+real(dp) :: u,v,w,gam,dx,dy,dz
+real(dp) :: x1,x2,y1,y2,z1,z2
+real(dp) :: x,y,z
+real(dp), parameter :: ep=1.d-10 !should include em also, but probably doesn't matter
 !-!         real(dp), external :: zlafun
-      x1=u-0.5d0*dx
-      x2=u+0.5d0*dx
-      y1=v-0.5d0*dy
-      y2=v+0.5d0*dy
-      z1=(w-0.5d0*dz)*gam
-      z2=(w+0.5d0*dz)*gam
-      if(x1<0.d0.and.x2>0.d0.and.y1<0.d0.and.y2>0.d0.and.z1<0.d0.and.z2>0.d0)then
-        res=zlafun(ep,ep,ep)-zlafun(x1,ep,ep)-zlafun(ep,y1,ep)-zlafun(ep,ep,z1)-zlafun(x1,y1,z1)+zlafun(x1,y1,ep)+zlafun(x1,ep,z1)+zlafun(ep,y1,z1) &
-     &     +zlafun(x2,ep,ep)-zlafun(ep,ep,ep)-zlafun(x2,y1,ep)-zlafun(x2,ep,z1)-zlafun(ep,y1,z1)+zlafun(ep,y1,ep)+zlafun(ep,ep,z1)+zlafun(x2,y1,z1) &
-     &     +zlafun(ep,y2,ep)-zlafun(x1,y2,ep)-zlafun(ep,ep,ep)-zlafun(ep,y2,z1)-zlafun(x1,ep,z1)+zlafun(x1,ep,ep)+zlafun(x1,y2,z1)+zlafun(ep,ep,z1) &
-     &     +zlafun(ep,ep,z2)-zlafun(x1,ep,z2)-zlafun(ep,y1,z2)-zlafun(ep,ep,ep)-zlafun(x1,y1,ep)+zlafun(x1,y1,z2)+zlafun(x1,ep,ep)+zlafun(ep,y1,ep) &
-     &     +zlafun(x2,y2,ep)-zlafun(ep,y2,ep)-zlafun(x2,ep,ep)-zlafun(x2,y2,z1)-zlafun(ep,ep,z1)+zlafun(ep,ep,ep)+zlafun(ep,y2,z1)+zlafun(x2,ep,z1) &
-     &     +zlafun(x2,ep,z2)-zlafun(ep,ep,z2)-zlafun(x2,y1,z2)-zlafun(x2,ep,ep)-zlafun(ep,y1,ep)+zlafun(ep,y1,z2)+zlafun(ep,ep,ep)+zlafun(x2,y1,ep) &
-     &     +zlafun(ep,y2,z2)-zlafun(x1,y2,z2)-zlafun(ep,ep,z2)-zlafun(ep,y2,ep)-zlafun(x1,ep,ep)+zlafun(x1,ep,z2)+zlafun(x1,y2,ep)+zlafun(ep,ep,ep) &
-     &     +zlafun(x2,y2,z2)-zlafun(ep,y2,z2)-zlafun(x2,ep,z2)-zlafun(x2,y2,ep)-zlafun(ep,ep,ep)+zlafun(ep,ep,z2)+zlafun(ep,y2,ep)+zlafun(x2,ep,ep)
-      else
-        res=zlafun(x2,y2,z2)-zlafun(x1,y2,z2)-zlafun(x2,y1,z2)-zlafun(x2,y2,z1)-zlafun(x1,y1,z1)+zlafun(x1,y1,z2)+zlafun(x1,y2,z1)+zlafun(x2,y1,z1)
-      endif
-      res=res/(dx*dy*dz*gam) !note the factor of gam in the denominator here, as needed for Ez
-      return
-      end function igfezfun
+x1=u-0.5d0*dx
+x2=u+0.5d0*dx
+y1=v-0.5d0*dy
+y2=v+0.5d0*dy
+z1=(w-0.5d0*dz)*gam
+z2=(w+0.5d0*dz)*gam
+if(x1<0.d0.and.x2>0.d0.and.y1<0.d0.and.y2>0.d0.and.z1<0.d0.and.z2>0.d0)then
+  res=zlafun(ep,ep,ep) &
+     -zlafun(x1,ep,ep)-zlafun(ep,y1,ep)-zlafun(ep,ep,z1)-zlafun(x1,y1,z1) &
+     +zlafun(x1,y1,ep)+zlafun(x1,ep,z1)+zlafun(ep,y1,z1)+zlafun(x2,ep,ep) &
+     -zlafun(ep,ep,ep)-zlafun(x2,y1,ep)-zlafun(x2,ep,z1)-zlafun(ep,y1,z1) &
+     +zlafun(ep,y1,ep)+zlafun(ep,ep,z1)+zlafun(x2,y1,z1)+zlafun(ep,y2,ep) &
+     -zlafun(x1,y2,ep)-zlafun(ep,ep,ep)-zlafun(ep,y2,z1)-zlafun(x1,ep,z1) &
+     +zlafun(x1,ep,ep)+zlafun(x1,y2,z1)+zlafun(ep,ep,z1)+zlafun(ep,ep,z2) &
+     -zlafun(x1,ep,z2)-zlafun(ep,y1,z2)-zlafun(ep,ep,ep)-zlafun(x1,y1,ep) &
+     +zlafun(x1,y1,z2)+zlafun(x1,ep,ep)+zlafun(ep,y1,ep)+zlafun(x2,y2,ep) &
+     -zlafun(ep,y2,ep)-zlafun(x2,ep,ep)-zlafun(x2,y2,z1)-zlafun(ep,ep,z1) &
+     +zlafun(ep,ep,ep)+zlafun(ep,y2,z1)+zlafun(x2,ep,z1)+zlafun(x2,ep,z2) &
+     -zlafun(ep,ep,z2)-zlafun(x2,y1,z2)-zlafun(x2,ep,ep)-zlafun(ep,y1,ep) &
+     +zlafun(ep,y1,z2)+zlafun(ep,ep,ep)+zlafun(x2,y1,ep)+zlafun(ep,y2,z2) &
+     -zlafun(x1,y2,z2)-zlafun(ep,ep,z2)-zlafun(ep,y2,ep)-zlafun(x1,ep,ep) &
+     +zlafun(x1,ep,z2)+zlafun(x1,y2,ep)+zlafun(ep,ep,ep)+zlafun(x2,y2,z2) &
+     -zlafun(ep,y2,z2)-zlafun(x2,ep,z2)-zlafun(x2,y2,ep)-zlafun(ep,ep,ep) &
+     +zlafun(ep,ep,z2)+zlafun(ep,y2,ep)+zlafun(x2,ep,ep)
+else
+  res=zlafun(x2,y2,z2)-zlafun(x1,y2,z2)-zlafun(x2,y1,z2)-zlafun(x2,y2,z1)-zlafun(x1,y1,z1)+zlafun(x1,y1,z2)+zlafun(x1,y2,z1)+zlafun(x2,y1,z1)
+endif
+res=res/(dx*dy*dz*gam) !note the factor of gam in the denominator here, as needed for Ez
+
+end function igfezfun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-      function xlafun(x,y,z) result(res)
-      implicit none
-      real(dp) :: res
-      real(dp) :: x,y,z,r
-      r=sqrt(x**2+y**2+z**2)
+function xlafun(x,y,z) result(res)
+implicit none
+real(dp) :: res
+real(dp) :: x,y,z,r
+r=sqrt(x**2+y**2+z**2)
     !  if (z+r == 0 ) print *, 'ERROR:x, r, x+r', x, y, z,r, x+r
     !  if (y+r == 0 ) print *, 'ERROR:y, r, y+r', x, y, z,r, y+r
     !  if (z+r == 0 ) print *, 'ERROR:z, r, z+r', x, y, z,r, z+r
 !     res=x*atan(y*z/(r*x))-z*atanh(r/y)-y*atanh(r/z)
 !res=z-x*atan(z/x)+x*atan(y*z/(x*r))-z*log(y+r)-y*log(z+r)
-      res=z-x*atan(z/x)+x*atan(y*z/(x*r))
-      if (y+r /= 0) res = res -z*log(y+r)
-      if (z+r /= 0) res = res -y*log(z+r)
+res=z-x*atan(z/x)+x*atan(y*z/(x*r))
+if (y+r /= 0) res = res -z*log(y+r)
+if (z+r /= 0) res = res -y*log(z+r)
 !     write(2,'(5(1pe12.5,1x))')x,y,z,r,res
-      return
-      end function xlafun
+
+end function xlafun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-      function ylafun(x,y,z) result(res)
-      implicit none
-      real(dp) :: res
-      real(dp) :: x,y,z,r
-      r=sqrt(x**2+y**2+z**2)
+function ylafun(x,y,z) result(res)
+implicit none
+real(dp) :: res
+real(dp) :: x,y,z,r
+r=sqrt(x**2+y**2+z**2)
 !res=x-y*atan(x/y)+y*atan(z*x/(y*r))-x*log(z+r)-z*log(x+r)
-      res=x-y*atan(x/y)+y*atan(z*x/(y*r))
-      if (z+r /= 0) res = res -x*log(z+r)
-      if (x+r /= 0) res = res -z*log(x+r)   
-      return
-      end function ylafun
+res=x-y*atan(x/y)+y*atan(z*x/(y*r))
+if (z+r /= 0) res = res -x*log(z+r)
+if (x+r /= 0) res = res -z*log(x+r)   
+
+end function ylafun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-      function zlafun(x,y,z) result(res)
-      implicit none
-      real(dp) :: res
-      real(dp) :: x,y,z,r
-      r=sqrt(x**2+y**2+z**2)
+function zlafun(x,y,z) result(res)
+implicit none
+real(dp) :: res
+real(dp) :: x,y,z,r
+r=sqrt(x**2+y**2+z**2)
 !res=y-z*atan(y/z)+z*atan(x*y/(z*r))-y*log(x+r)-x*log(y+r)
-      res=y-z*atan(y/z)+z*atan(x*y/(z*r))
-      if (x+r /= 0) res = res -y*log(x+r)
-      if (y+r /= 0) res = res -x*log(y+r)
-      return
-      end function zlafun
+res=y-z*atan(y/z)+z*atan(x*y/(z*r))
+if (x+r /= 0) res = res -y*log(x+r)
+if (y+r /= 0) res = res -x*log(y+r)
+
+end function zlafun
 
 
 !------------------------------------------------------------------------
@@ -714,33 +752,35 @@ end subroutine
 !------------------------------------------------------------------------
 !+
 
-      subroutine get_rho_and_mesh_spacing(xa,ya,za,lostflag, rho,dx,dy,dz,xmin,ymin,zmin,chrgpermacro,ilo,ihi,jlo,jhi,klo,khi, &
-     & ilo_gbl,ihi_gbl,jlo_gbl,jhi_gbl,klo_gbl,khi_gbl,idecomp,npx,npy,npz,n1,nraysp,maxrayp)
+subroutine get_rho_and_mesh_spacing(xa,ya,za,lostflag, rho,dx,dy,dz,xmin,ymin,zmin,chrgpermacro, &
+                         ilo,ihi,jlo,jhi,klo,khi, &
+                         ilo_gbl,ihi_gbl,jlo_gbl,jhi_gbl,klo_gbl,khi_gbl, &
+                         idecomp,npx,npy,npz,n1,nraysp,maxrayp)
 !-!#ifdef MPIPARALLEL
 !     USE mpi
 !-!#endif
-      implicit none
-      
-      integer :: ilo,ihi,jlo,jhi,klo,khi,ilo_gbl,ihi_gbl,jlo_gbl,jhi_gbl,klo_gbl,khi_gbl,idecomp,npx,npy,npz,n1,nraysp,maxrayp
-      real(dp) :: dx,dy,dz,xmin,ymin,zmin,chrgpermacro
-      !-! real(dp), dimension(maxrayp,n1) :: ptcls
-      !type (coord_struct) :: ptcls(maxrayp)
-      real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
+implicit none
+
+integer :: ilo,ihi,jlo,jhi,klo,khi,ilo_gbl,ihi_gbl,jlo_gbl,jhi_gbl,klo_gbl,khi_gbl,idecomp,npx,npy,npz,n1,nraysp,maxrayp
+real(dp) :: dx,dy,dz,xmin,ymin,zmin,chrgpermacro
+!-! real(dp), dimension(maxrayp,n1) :: ptcls
+!type (coord_struct) :: ptcls(maxrayp)
+real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
 !
-      real(dp), dimension(maxrayp) :: xa,ya,za,lostflag !lostflag=1.0 if particle is "lost"
-      real(dp) :: xmax,ymax,zmax !not needed
-      integer :: ifail,n
-      integer :: mprocs,myrank,ierr
-      real(dp) :: xsml,xbig,ysml,ybig,zsml,zbig
+real(dp), dimension(maxrayp) :: xa,ya,za,lostflag !lostflag=1.0 if particle is "lost"
+real(dp) :: xmax,ymax,zmax !not needed
+integer :: ifail,n
+integer :: mprocs,myrank,ierr
+real(dp) :: xsml,xbig,ysml,ybig,zsml,zbig
 !     real(dp), parameter :: eps=2.d-15   !3.34d-16 is OK on my Mac
-      real(dp), parameter :: eps=0.5d0
-      integer :: nx,ny,nz !temporaries
+real(dp), parameter :: eps=0.5d0
+integer :: nx,ny,nz !temporaries
 !-!#ifdef MPIPARALLEL
 !     call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
 !     call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 !-!#else
-      mprocs=1
-      myrank=0
+mprocs=1
+myrank=0
 !-!#endif
 !     if(myrank.eq.0)write(6,*)'hello from get_rho'
       !xa(1:maxrayp)=ptcls(:)%vec(1) !-! ptcls(1:maxrayp,1)
@@ -748,22 +788,22 @@ end subroutine
       !za(1:maxrayp)=ptcls(:)%vec(5) !-! ptcls(1:maxrayp,5)
       !lostflag(1:maxrayp)= ptcls(:)%state  !-! ptcls(1:maxrayp,7)
 ! compute the bounding box and dx,dy,dz so particles can be localized to the correct proc:
-      call getbeamboundingbox(xa,ya,za,lostflag,xsml,xbig,ysml,ybig,zsml,zbig,nraysp) !nraysp should be bigrayp?
-      xbig=xbig*(1.d0+sign(1.d0,xbig)*eps)
-      xsml=xsml*(1.d0-sign(1.d0,xsml)*eps)
-      ybig=ybig*(1.d0+sign(1.d0,ybig)*eps)
-      ysml=ysml*(1.d0-sign(1.d0,ysml)*eps)
-      zbig=zbig*(1.d0+sign(1.d0,zbig)*eps)
-      zsml=zsml*(1.d0-sign(1.d0,zsml)*eps)
-      nx=ihi-ilo+1
-      ny=jhi-jlo+1
-      nz=khi-klo+1
-      dx=(xbig-xsml)/(nx-3)
-      dy=(ybig-ysml)/(ny-3)
-      dz=(zbig-zsml)/(nz-3)
-      xmin=xsml-dx; xmax=xbig+dx
-      ymin=ysml-dy; ymax=ybig+dy
-      zmin=zsml-dz; zmax=zbig+dz
+call getbeamboundingbox(xa,ya,za,lostflag,xsml,xbig,ysml,ybig,zsml,zbig,nraysp) !nraysp should be bigrayp?
+xbig=xbig*(1.d0+sign(1.d0,xbig)*eps)
+xsml=xsml*(1.d0-sign(1.d0,xsml)*eps)
+ybig=ybig*(1.d0+sign(1.d0,ybig)*eps)
+ysml=ysml*(1.d0-sign(1.d0,ysml)*eps)
+zbig=zbig*(1.d0+sign(1.d0,zbig)*eps)
+zsml=zsml*(1.d0-sign(1.d0,zsml)*eps)
+nx=ihi-ilo+1
+ny=jhi-jlo+1
+nz=khi-klo+1
+dx=(xbig-xsml)/(nx-3)
+dy=(ybig-ysml)/(ny-3)
+dz=(zbig-zsml)/(nz-3)
+xmin=xsml-dx; xmax=xbig+dx
+ymin=ysml-dy; ymax=ybig+dy
+zmin=zsml-dz; zmax=zbig+dz
 !
 !
 !-!#ifdef MPIPARALLEL
@@ -780,63 +820,61 @@ end subroutine
 !     ya(1:nraysp)=ptcls(2,1:nraysp)
 !     za(1:nraysp)=ptcls(3,1:nraysp)
 !-!#endif
-      lostflag(1:maxrayp)=1.d0
-      lostflag(1:nraysp)=0.d0    !all particles are included in this example run
-      call depose_rho_scalar(xa,ya,za,lostflag,rho,chrgpermacro,ilo,ihi,jlo,jhi,klo,khi,dx,dy,dz,xmin,ymin,zmin,nraysp, &
-     &                              ilo_gbl,jlo_gbl,klo_gbl,ifail)
-      return
-      end
+lostflag(1:maxrayp)=1.d0
+lostflag(1:nraysp)=0.d0    !all particles are included in this example run
+call depose_rho_scalar(xa,ya,za,lostflag,rho,chrgpermacro,ilo,ihi,jlo,jhi,klo,khi,dx,dy,dz,xmin,ymin,zmin,nraysp, &
+                              ilo_gbl,jlo_gbl,klo_gbl,ifail)
+
+end subroutine
 !
-
-
 
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
 
-      subroutine getbeamboundingbox(x,y,z,lostflag,xmin,xmax,ymin,ymax,zmin,zmax,nraysp)
+subroutine getbeamboundingbox(x,y,z,lostflag,xmin,xmax,ymin,ymax,zmin,zmax,nraysp)
 !-!#ifdef MPIPARALLEL
 !     USE mpi
 !-!#endif
-      implicit none
-      integer :: nraysp !!-!# of particles per MPI process
-      real(dp), dimension(*) :: x,y,z,lostflag !lostflag=1.0 if particle is "lost"
-      real(dp) :: xmin,xmax,ymin,ymax,zmin,zmax
-      real(dp), dimension(6) :: veclcl,vecgbl
-      real(dp) :: xminlcl,xmaxlcl,yminlcl,ymaxlcl,zminlcl,zmaxlcl
-      real(dp) :: xwidthorig,ywidthorig,zwidthorig
-      integer :: ierror
+implicit none
+integer :: nraysp !!-!# of particles per MPI process
+real(dp), dimension(*) :: x,y,z,lostflag !lostflag=1.0 if particle is "lost"
+real(dp) :: xmin,xmax,ymin,ymax,zmin,zmax
+real(dp), dimension(6) :: veclcl,vecgbl
+real(dp) :: xminlcl,xmaxlcl,yminlcl,ymaxlcl,zminlcl,zmaxlcl
+real(dp) :: xwidthorig,ywidthorig,zwidthorig
+integer :: ierror
 !need this since, if nraysp=0, the next 6 statements are skipped
-      veclcl(1:3)=-9999999.
-      veclcl(4:6)=-9999999.
-      if(nraysp.eq.0)goto 100
+veclcl(1:3)=-9999999.
+veclcl(4:6)=-9999999.
+if(nraysp > 0) then
 !     veclcl(1)=-minval(x(1:nraysp),lostflag(1:nraysp).eq.0.d0)
 !     veclcl(2)=-minval(y(1:nraysp),lostflag(1:nraysp).eq.0.d0)
 !     veclcl(3)=-minval(z(1:nraysp),lostflag(1:nraysp).eq.0.d0)
 !     veclcl(4)=maxval(x(1:nraysp),lostflag(1:nraysp).eq.0.d0)
 !     veclcl(5)=maxval(y(1:nraysp),lostflag(1:nraysp).eq.0.d0)
 !     veclcl(6)=maxval(z(1:nraysp),lostflag(1:nraysp).eq.0.d0)
-      veclcl(1)=-minval(x(1:nraysp))
-      veclcl(2)=-minval(y(1:nraysp))
-      veclcl(3)=-minval(z(1:nraysp))
-      veclcl(4)=maxval(x(1:nraysp))
-      veclcl(5)=maxval(y(1:nraysp))
-      veclcl(6)=maxval(z(1:nraysp))
-  100 continue
+  veclcl(1)=-minval(x(1:nraysp))
+  veclcl(2)=-minval(y(1:nraysp))
+  veclcl(3)=-minval(z(1:nraysp))
+  veclcl(4)=maxval(x(1:nraysp))
+  veclcl(5)=maxval(y(1:nraysp))
+  veclcl(6)=maxval(z(1:nraysp))
+endif
 !-!#ifdef MPIPARALLEL
 !     call MPI_ALLREDUCE(veclcl,vecgbl,6,MPI_DOUBLE_PRECISION,MPI_MAX,MPI_COMM_WORLD,ierror)
 !-!#else
-      vecgbl(1:6)=veclcl(1:6)
+vecgbl(1:6)=veclcl(1:6)
 !-!#endif
-      xmin=-vecgbl(1)
-      ymin=-vecgbl(2)
-      zmin=-vecgbl(3)
-      xmax=vecgbl(4)
-      ymax=vecgbl(5)
-      zmax=vecgbl(6)
-      return
-      end
+xmin=-vecgbl(1)
+ymin=-vecgbl(2)
+zmin=-vecgbl(3)
+xmax=vecgbl(4)
+ymax=vecgbl(5)
+zmax=vecgbl(6)
+
+end subroutine
 
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
@@ -844,146 +882,136 @@ end subroutine
 !+
 
 subroutine ccfft3d(a,b,idir,n1,n2,n3,iskiptrans)
-      implicit none
-      integer, dimension(3) :: idir
-      complex(dp), dimension(:,:,:) :: a,b
-      complex(dp), allocatable :: tmp1(:,:,:), tmp2(:,:,:)
-      integer :: n1,n2,n3
-      integer :: iskiptrans
-      integer :: ileft,iright,i,j,k
-      b(:,:,:)=a(:,:,:)
-      
-      allocate(tmp1(n2,n1,n3))
-      allocate(tmp2(n3,n2,n1))
-      
-      if(idir(1).eq.0.and.idir(2).eq.0.and.idir(3).eq.0)return
-      
-      call mccfft1d(b,n2*n3,n1,idir(1))
-      do k=1,n3
-      do j=1,n2
-      do i=1,n1
+implicit none
+integer, dimension(3) :: idir
+complex(dp), dimension(:,:,:) :: a,b
+complex(dp), allocatable :: tmp1(:,:,:), tmp2(:,:,:)
+integer :: n1,n2,n3
+integer :: iskiptrans
+integer :: ileft,iright,i,j,k
+b(:,:,:)=a(:,:,:)
+
+allocate(tmp1(n2,n1,n3))
+allocate(tmp2(n3,n2,n1))
+
+if(idir(1).eq.0.and.idir(2).eq.0.and.idir(3).eq.0)return
+
+call mccfft1d(b,n2*n3,n1,idir(1))
+
+
+forall(k=1:n3, j=1:n2, i=1:n1)
 ! there's some problem with the commented out statements
 !       iright=(k-1)*n1*n2+(j-1)*n2+i
 !       ileft =(k-1)*n2*n1+(i-1)*n1+j
 !       tmp(ileft)=b(iright)
-        tmp1(j,i,k)=b(i,j,k)
-      enddo
-      enddo
-      enddo
-      
-      call mccfft1d(tmp1,n3*n1,n2,idir(2))
-      do k=1,n3
-      do j=1,n2
-      do i=1,n1
+  tmp1(j,i,k)=b(i,j,k)
+end forall
+
+
+call mccfft1d(tmp1,n3*n1,n2,idir(2))
+forall(k=1:n3, j=1:n2, i=1:n1)
 !       iright=(k-1)*n2*n1+(i-1)*n1+j
 !       ileft =(i-1)*n2*n3+(j-1)*n3+k
 !       b(ileft)=tmp(iright)
-        tmp2(k,j,i)=tmp1(j,i,k)
-      enddo
-      enddo
-      enddo
+  tmp2(k,j,i)=tmp1(j,i,k)
+end forall
 
-      call mccfft1d(tmp2,n1*n2,n3,idir(3))
-      if(iskiptrans.eq.1)return
-      do k=1,n3
-      do j=1,n2
-      do i=1,n1
+
+call mccfft1d(tmp2,n1*n2,n3,idir(3))
+if(iskiptrans.eq.1)return
+forall(k=1:n3, j=1:n2, i=1:n1)
 !       ileft =(k-1)*n1*n2+(j-1)*n2+i
 !       iright=(i-1)*n2*n3+(j-1)*n3+k
 !       b(ileft)=tmp(iright)
         b(i,j,k)=tmp2(k,j,i)
-      enddo
-      enddo
-      enddo
-      return
-      end
+end forall
+
+end subroutine 
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !-------------------------------ccfftnr-----------------------------------------
 !+
-      subroutine mccfft1d(a,ntot,lenfft,idir)
-      implicit none
-      complex(dp), dimension(*) :: a
-      integer :: ntot,lenfft,idir
-      integer :: n
-      do n=1,ntot*lenfft,lenfft
-       call ccfftnr(a(n),lenfft,idir)
-       ! call gsl_fft(a(n),lenfft,idir)  
-      enddo
-      return
-      end
+subroutine mccfft1d(a,ntot,lenfft,idir)
+implicit none
+complex(dp), dimension(*) :: a
+integer :: ntot,lenfft,idir
+integer :: n
+do n=1,ntot*lenfft,lenfft
+ call ccfftnr(a(n),lenfft,idir)
+ ! call gsl_fft(a(n),lenfft,idir)  
+enddo
+return
+end
 
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
 
-      subroutine ccfftnr(cdata,nn,isign)
-      implicit none
-      integer nn,isign,i,j,n,m,istep,mmax
-      complex(dp) cdata
-      real(dp) data
-      dimension cdata(nn),data(2*nn)
-      real(dp) tempi,tempr,theta,wpr,wpi,wr,wi,wtemp,twopi
-      do i=1,nn
-        data(2*i-1)=real(cdata(i))
-        data(2*i) =aimag(cdata(i))
-      enddo
+subroutine ccfftnr(cdata,nn,isign)
+implicit none
+integer nn,isign,i,j,n,m,istep,mmax
+complex(dp) cdata
+real(dp) data
+dimension cdata(nn),data(2*nn)
+real(dp) tempi,tempr,theta,wpr,wpi,wr,wi,wtemp,twopi
+do i=1,nn
+  data(2*i-1)=real(cdata(i))
+  data(2*i) =aimag(cdata(i))
+enddo
 ! bit reversal:
-      n=2*nn
-      j=1
-      do i=1,n,2
-       if(j>i)then
-        tempr=data(j)
-        tempi=data(j+1)
-        data(j)=data(i)
-        data(j+1)=data(i+1)
-        data(i)=tempr
-        data(i+1)=tempi
-       endif
-       m=n/2
-    1  if((m.ge.2).and.(j>m))then
-        j=j-m
-        m=m/2
-        goto 1
-       endif
-       j=j+m
-      enddo
+n=2*nn
+j=1
+do i=1,n,2
+  if(j>i)then
+    tempr=data(j)
+    tempi=data(j+1)
+    data(j)=data(i)
+    data(j+1)=data(i+1)
+    data(i)=tempr
+    data(i+1)=tempi
+   endif
+  m=n/2
+  do while ((m.ge.2).and.(j>m)) 
+    j=j-m
+    m=m/2
+  enddo
+  j=j+m
+enddo
 ! Danielson-Lanczos:
-      twopi=4.0d0*asin(1.0d0)
-      mmax=2
-    2 if(n>mmax)then
-       istep=2*mmax
-       theta=twopi/(isign*mmax)
-       wpr=-2.d0*sin(0.5d0*theta)**2
-       wpi=sin(theta)
-       wr=1.0
-       wi=0.0
-       do m=1,mmax,2
-        do i=m,n,istep
-         j=i+mmax
-         tempr=wr*data(j)-wi*data(j+1)
-         tempi=wr*data(j+1)+wi*data(j)
-         data(j)=data(i)-tempr
-         data(j+1)=data(i+1)-tempi
-         data(i)=data(i)+tempr
-         data(i+1)=data(i+1)+tempi
-        enddo
-        wtemp=wr
-        wr=wr*wpr-wi*wpi+wr
-        wi=wi*wpr+wtemp*wpi+wi
-       enddo
-       mmax=istep
-       goto 2
-      endif
+twopi=4.0d0*asin(1.0d0)
+mmax=2
+do while (n>mmax)
+  istep=2*mmax
+  theta=twopi/(isign*mmax)
+  wpr=-2.d0*sin(0.5d0*theta)**2
+  wpi=sin(theta)
+  wr=1.0
+  wi=0.0
+  do m=1,mmax,2
+    do i=m,n,istep
+      j=i+mmax
+      tempr=wr*data(j)-wi*data(j+1)
+      tempi=wr*data(j+1)+wi*data(j)
+      data(j)=data(i)-tempr
+      data(j+1)=data(i+1)-tempi
+      data(i)=data(i)+tempr
+      data(i+1)=data(i+1)+tempi
+    enddo
+    wtemp=wr
+    wr=wr*wpr-wi*wpi+wr
+    wi=wi*wpr+wtemp*wpi+wi
+  enddo
+  mmax=istep
+enddo 
 !     ezero=0.d0
 !     eunit=1.d0
-      do i=1,nn
-        cdata(i)=data(2*i-1)+(0.d0,1.d0)*data(2*i)
+do i=1,nn
+  cdata(i)=data(2*i-1)+(0.d0,1.d0)*data(2*i)
 !       cdata(i)=data(2*i-1)+cmplx(ezero,eunit)*data(2*i)
-      enddo
-      return
-      end
+enddo
+
+end subroutine
 
 
 !------------------------------------------------------------------------

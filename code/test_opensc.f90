@@ -11,8 +11,6 @@ type(mesh3d_struct) :: mesh3d
 integer :: nx, ny, nz ! # of grid points
 integer :: n_particle
 integer, parameter :: n1=7 ! (x,gbx,y,gby,z,gbz)(t) ; 7 is lost particle flag (not needed)
-integer:: idirectfieldcalc 
-integer :: igfflag
 integer, parameter :: iseed=1234567 ! seed for random # generator
 integer :: disttype
 real(dp) :: gaussiancutoff !cutoff if a Gaussian initial condition is used
@@ -32,11 +30,12 @@ real(dp) :: sigma_x, sigma_y, sigma_z
 integer :: open_status, namelist_file
 character(40) :: in_file
 
+logical :: direct_field_calc, integrated_green_function
 
 namelist / opensc_test_params / &
     nx, ny, nz, n_particle, e_tot, bunch_charge, &
     sigma_x, sigma_y, sigma_z, gaussiancutoff, &
-    idirectfieldcalc, igfflag
+    direct_field_calc, integrated_green_function
 
 ! Namelist defaults
 nx=64
@@ -50,9 +49,9 @@ sigma_x = 0.001
 sigma_y = 0.001
 sigma_z = 0.0001
 gaussiancutoff=5
-idirectfieldcalc=1 ! =0 to compute phi and use finite differences for E; =1 to compute E directly
-igfflag=1 ! =0 for ordinary Green function; =1 for integrated Green function
 disttype=1 ! =0 for uniform, =1 for Gaussian
+direct_field_calc = .true.  
+integrated_green_function = .true.
  
 !Read namelist
 in_file = 'test_opensc.in'
@@ -104,7 +103,7 @@ mesh3d%n = [nx, ny, nz]
 mesh3d%gamma = gamma
 call deposit_bunch_on_mesh(y(:,1),y(:,3), y(:,5), y(:,7), bunch_charge, mesh3d)
 print *, 'space charge field calc...'
-call space_charge_field_calc(mesh3d)
+call space_charge_field_calc(mesh3d, direct_field_calc=direct_field_calc, integrated_green_function=integrated_green_function)
 print *, '...done'
 
 

@@ -690,7 +690,8 @@ if(x1<0.d0.and.x2>0.d0.and.y1<0.d0.and.y2>0.d0.and.z1<0.d0.and.z2>0.d0)then
      -zlafun(ep,y2,z2)-zlafun(x2,ep,z2)-zlafun(x2,y2,ep)-zlafun(ep,ep,ep) &
      +zlafun(ep,ep,z2)+zlafun(ep,y2,ep)+zlafun(x2,ep,ep)
 else
-  res=zlafun(x2,y2,z2)-zlafun(x1,y2,z2)-zlafun(x2,y1,z2)-zlafun(x2,y2,z1)-zlafun(x1,y1,z1)+zlafun(x1,y1,z2)+zlafun(x1,y2,z1)+zlafun(x2,y1,z1)
+  res=zlafun(x2,y2,z2)-zlafun(x1,y2,z2)-zlafun(x2,y1,z2)-zlafun(x2,y2,z1) &
+     -zlafun(x1,y1,z1)+zlafun(x1,y1,z2)+zlafun(x1,y2,z1)+zlafun(x2,y1,z1)
 endif
 res=res/(dx*dy*dz*gam) !note the factor of gam in the denominator here, as needed for Ez
 

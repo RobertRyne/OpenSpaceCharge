@@ -18,7 +18,6 @@ contains
       use mpi
       implicit none
       integer :: n1,nraysp,disttype,iseed
-   !   real(8), dimension(nraysp,n1) :: ptcls
       real(8), dimension(nraysp,n1) :: ptcls
       real(8), dimension(6,6) :: sigmat
       real(8) :: gaussiancutoff
@@ -52,8 +51,9 @@ contains
           if(r1*r1+r3*r3+r5*r5.gt.gaussiancutoff**2)goto 11
         endif
         
-       ! print *, 'gendist 1, n = ', n, r1*sqrt(sigmat(1,1))
+! print *, 'gendist 1, n = ', n, r1*sqrt(sigmat(1,1))
 ! this version assumes that sigmat is 2x2 block diagonal
+! this is a mess. don't know why I did it this way. Replace later. RDR
 !x-gbx:
         ptcls(n,1)=r1*sqrt(sigmat(1,1))
        ! print *, 'gendist 2'
@@ -92,24 +92,27 @@ contains
       end subroutine normdv
 !
       subroutine initrandom(inpseed)
+      use mpi
       implicit none
       integer :: inpseed
-      integer :: iseedsize,n
+      integer :: iseedsize,n,i
       integer, dimension(:), allocatable :: iputarray
-      integer :: idproc=0
-! determine the seed size:
+      integer :: myrank,ierr
+      call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+! determine the seed size and allocate the seed array:
       call random_seed(size=iseedsize)
-!     if(idproc.eq.0)write(6,*)'iseedsize=',iseedsize
       allocate(iputarray(iseedsize))
-      iputarray(1)=inpseed
-! initialize the remaining elements of iputarray:
-      if(iseedsize.gt.1)then
-        do n=2,iseedsize
-          iputarray(n)=iputarray(n-1)+1
-        enddo
-      endif
-! initialize random_number with the seed array:
+! set a unique seed for each proc:
+      n=inpseed
+      do i=1,iseedsize*(myrank+1)
+        n=mod(8121*n+28411,134456) !I don't remember why I did this
+      enddo
+      do i=1,iseedsize
+        n=mod(8121*n+28411,134456)
+        iputarray(i)=n
+      enddo
       call random_seed(put=iputarray)
+!?    deallocate(iputarray)
       return
       end subroutine initrandom
       

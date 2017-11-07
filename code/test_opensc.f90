@@ -105,6 +105,10 @@ if(myrank.eq.0)then
   if(disttype.eq.0)write(6,*)'...done computing initial 3D uniform spatial distribution w/ cold velocity distribution'
   if(disttype.eq.1)write(6,*)'...done computing initial 3D Gaussian spatial distribution w/ cold velocity distribution'
 endif
+!diagnostics to make sure that the seed is different on each core:
+if(myrank.eq.0)write(2,'(7(1pe12.5,1x))')y(1,1:7),y(2,1:7),y(3,1:7),y(4,1:7),y(5,1:7)
+if(myrank.eq.1)write(3,'(7(1pe12.5,1x))')y(1,1:7),y(2,1:7),y(3,1:7),y(4,1:7),y(5,1:7)
+if(myrank.eq.2)write(4,'(7(1pe12.5,1x))')y(1,1:7),y(2,1:7),y(3,1:7),y(4,1:7),y(5,1:7)
 !
 
 if(myrank.eq.0)print *, 'depositing bunch on mesh...'

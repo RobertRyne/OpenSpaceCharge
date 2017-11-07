@@ -15,6 +15,7 @@ contains
 
 
       subroutine gendist(ptcls,n1,nraysp,sigmat,gaussiancutoff,disttype,iseed)
+      use mpi
       implicit none
       integer :: n1,nraysp,disttype,iseed
    !   real(8), dimension(nraysp,n1) :: ptcls
@@ -24,8 +25,12 @@ contains
       integer :: n
       real(8) :: r1,r2,r3,r4,r5,r6,arg
       real(8), dimension(6) :: cent
+      integer :: mprocs,myrank,ierr
       
-      print *, 'gendist'
+      call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+      call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+
+      if(myrank.eq.0)print *, 'gendist'
       
       call initrandom(iseed)
       do n=1,nraysp
@@ -70,7 +75,7 @@ contains
       ptcls(1,1:5)=0.d0 !zero out the first particle to see how the origin gets kicked around by space charge
       return
       
-       print *, 'gendist end'
+       if(myrank.eq.0)print *, 'gendist end'
       end subroutine gendist
 !
       subroutine normdv(d1,d2)

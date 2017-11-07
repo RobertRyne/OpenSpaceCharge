@@ -1,6 +1,7 @@
 program openbc_test
 ! Code to test the OpenBC package
 
+use mpi
 use open_spacecharge_mod
 use test_mod
 
@@ -32,10 +33,16 @@ character(40) :: in_file
 
 logical :: direct_field_calc, integrated_green_function
 
+integer :: mprocs,myrank,ierr
+
 namelist / opensc_test_params / &
     nx, ny, nz, n_particle, e_tot, bunch_charge, &
     sigma_x, sigma_y, sigma_z, gaussiancutoff, &
     direct_field_calc, integrated_green_function
+!
+call MPI_INIT(ierr)      !initialize MPI
+call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
 ! Namelist defaults
 nx=64
@@ -118,6 +125,7 @@ call prntall(0,n1,n_particle,nx,ny,nz,y, &
   
 !=========================================
 !
+call MPI_FINALIZE(ierr)
 
 end program
 

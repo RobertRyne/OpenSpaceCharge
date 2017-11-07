@@ -118,12 +118,14 @@ if(myrank.eq.0)print *, '...done'
 
 
 ! diagnostics:
-call prntall(0,n1,n_particle,nx,ny,nz,y, &
+if(myrank.eq.0)then
+  call prntall(0,n1,n_particle,nx,ny,nz,y, &
   mesh3d%field%B(1), mesh3d%field%B(2), mesh3d%field%B(3), &
   mesh3d%field%E(1), mesh3d%field%E(2), mesh3d%field%E(3), &
   tval, &
   mesh3d%delta(1),  mesh3d%delta(2),  mesh3d%delta(3), &
   mesh3d%min(1), mesh3d%min(2), mesh3d%min(3)) 
+endif
   
 !=========================================
 !

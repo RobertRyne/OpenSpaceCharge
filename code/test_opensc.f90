@@ -65,16 +65,16 @@ in_file = 'test_opensc.in'
 if (command_argument_count() > 0) call get_command_argument(1, in_file)
 open(newunit=namelist_file, file = in_file, status = 'old', iostat=open_status)
 if (open_status /= 0) then
-  print *, 'Input file missing: ', in_file
-  print *, 'Using defaults'
+  if(myrank.eq.0)print *, 'Input file missing: ', in_file
+  if(myrank.eq.0)print *, 'Using defaults'
 else 
   read (namelist_file, nml = opensc_test_params)
   close (namelist_file)
 endif
 
-print *, '------------------------'
-WRITE(*, opensc_test_params)
-print *, '------------------------'
+if(myrank.eq.0)print *, '------------------------'
+if(myrank.eq.0)WRITE(*, opensc_test_params)
+if(myrank.eq.0)print *, '------------------------'
 
 gamma = e_tot/mc2
 chrgpermacro=bunch_charge/n_particle
@@ -85,33 +85,35 @@ allocate(y(n_particle,n1))
 ! parameters needed to call openbc routines:
 ilo_rho_gbl=1; ihi_rho_gbl=nx; jlo_rho_gbl=1; jhi_rho_gbl=ny; klo_rho_gbl=1; khi_rho_gbl=nz !assumes power-of-2
 ilo=ilo_rho_gbl;ihi=ihi_rho_gbl; jlo=jlo_rho_gbl;jhi=jhi_rho_gbl; klo=klo_rho_gbl;khi=khi_rho_gbl !serial code
-write(6,*)'grid sizes ihi,jhi,khi=',ihi,jhi,khi
+if(myrank.eq.0)write(6,*)'grid sizes ihi,jhi,khi=',ihi,jhi,khi
 idecomp=-1;npx=1;npy=1;npz=1 !none of these are relevant to this serial code
 !
 ! initialize the particles:
-write(6,*)'gamma=',gamma
+if(myrank.eq.0)write(6,*)'gamma=',gamma
 sigmat(1:6,1:6)=0.d0
 sigmat(1,1)=sigma_x**2; sigmat(3,3)=sigma_y**2; sigmat(5,5)=sigma_z**2 !2nd moment matrix of initial dist
 cent(1:6)=0.d0
 gb0=sqrt((gamma+1.d0)*(gamma-1.d0))
-write(6,*)'beta0=',gb0/gamma
+if(myrank.eq.0)write(6,*)'beta0=',gb0/gamma
 cent(6)=gb0  !if integrating in time, this is gamma*beta of the centroid (set to gamma if integrating in z)
 
-print *, 'Generating distribution...'
+if(myrank.eq.0)print *, 'Generating distribution...'
 call gendist(y,n1,n_particle,sigmat,gaussiancutoff,disttype,iseed)
 y(:,7)=0.d0 !lost particle flag (or use for some other purpose)
 y(1:n_particle,6)=y(1:n_particle,6)+cent(6)
-if(disttype.eq.0)write(6,*)'...done computing initial 3D uniform spatial distribution w/ cold velocity distribution'
-if(disttype.eq.1)write(6,*)'...done computing initial 3D Gaussian spatial distribution w/ cold velocity distribution'
+if(myrank.eq.0)then
+  if(disttype.eq.0)write(6,*)'...done computing initial 3D uniform spatial distribution w/ cold velocity distribution'
+  if(disttype.eq.1)write(6,*)'...done computing initial 3D Gaussian spatial distribution w/ cold velocity distribution'
+endif
 !
 
-print *, 'depositing bunch on mesh...'
+if(myrank.eq.0)print *, 'depositing bunch on mesh...'
 mesh3d%n = [nx, ny, nz]
 mesh3d%gamma = gamma
 call deposit_bunch_on_mesh(y(:,1),y(:,3), y(:,5), y(:,7), bunch_charge, mesh3d)
-print *, 'space charge field calc...'
+if(myrank.eq.0)print *, 'space charge field calc...'
 call space_charge_field_calc(mesh3d, direct_field_calc=direct_field_calc, integrated_green_function=integrated_green_function)
-print *, '...done'
+if(myrank.eq.0)print *, '...done'
 
 
 

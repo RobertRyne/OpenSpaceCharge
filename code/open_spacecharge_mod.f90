@@ -36,12 +36,17 @@ contains
 !+
 
 subroutine deposit_bunch_on_mesh(xa, ya, za, lostflag,  charge, mesh3d)
+use mpi
 type(mesh3d_struct) :: mesh3d
 real(dp) :: charge, chrgpermacro
 real(dp), dimension(:) :: xa, ya, za, lostflag 
 integer, parameter :: idecomp = 999, npx=999, npy=999, npz = 999, n1 = 6 
 integer :: nraysp,maxrayp
 integer :: error
+integer :: mprocs,myrank,ierr
+
+call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
 if (.not. allocated(mesh3d%charge)) then
   allocate(mesh3d%charge(mesh3d%n(1),mesh3d%n(2),mesh3d%n(3)))
@@ -63,7 +68,7 @@ mesh3d%max(1) = mesh3d%min(1)+(mesh3d%n(1)-1)*mesh3d%delta(1)
 mesh3d%max(2) = mesh3d%min(2)+(mesh3d%n(2)-1)*mesh3d%delta(2)
 mesh3d%max(3) = mesh3d%min(3)+(mesh3d%n(3)-1)*mesh3d%delta(3)
 
-call print_mesh3d(mesh3d)
+if(myrank.eq.0)call print_mesh3d(mesh3d)
 
 end subroutine
 
@@ -122,29 +127,33 @@ end subroutine
 !------------------------------------------------------------------------
 subroutine getfields(rho,gam0,dx,dy,dz,phi,ex,ey,ez,bx,by,bz,nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc, &
                      ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl)
+use mpi
 implicit none
 integer, intent(in) :: nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc
 integer, intent(in) :: ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl
 real(dp), intent(in) :: gam0,dx,dy,dz
 real(dp), intent(in), dimension(:,:,:) :: rho
 real(dp), intent(out), dimension(:,:,:) :: phi,bx,by,bz,ex,ey,ez
-integer :: icomp,ierr
+integer :: icomp
 real(dp), parameter :: clight=299792458.d0
 !real(dp), parameter :: mu0=8.d0*asin(1.d0)*1.d-7
 integer :: i,j,k
 real(dp) :: gb0
+integer :: mprocs,myrank,ierr
 !
+call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
 
 gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
 
 
 if(idirectfieldcalc.eq.0)then
-  write(6,*)'computing phi with OpenBC'
+  if(myrank.eq.0)write(6,*)'computing phi with OpenBC'
   icomp=0
         call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
      &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
-  write(6,*)'...done'
+  if(myrank.eq.0)write(6,*)'...done'
   do k=1,nz
     do j=1,ny
       do i=1,nx
@@ -159,11 +168,11 @@ if(idirectfieldcalc.eq.0)then
 endif
 
 if(idirectfieldcalc.eq.1)then
-  write(6,*)'computing Ex,Ey,Ez with OpenBC'
+  if(myrank.eq.0)write(6,*)'computing Ex,Ey,Ez with OpenBC'
   icomp=1
   call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
      &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
-  print *, 'Ex test: ', phi(nx/2,ny/2,nz/2)
+  if(myrank.eq.0)print *, 'Ex test: ', phi(nx/2,ny/2,nz/2)
   do k=1,nz
     do j=1,ny
       do i=1,nx
@@ -174,7 +183,7 @@ if(idirectfieldcalc.eq.1)then
   icomp=2
   call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
      &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
-  print *, 'Ey test: ', phi(nx/2,ny/2,nz/2)
+  if(myrank.eq.0)print *, 'Ey test: ', phi(nx/2,ny/2,nz/2)
   do k=1,nz
     do j=1,ny
       do i=1,nx
@@ -186,7 +195,7 @@ if(idirectfieldcalc.eq.1)then
   call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
      &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
   
-  print *, 'Ez test: ', phi(nx/2,ny/2,nz/2)
+  if(myrank.eq.0)print *, 'Ez test: ', phi(nx/2,ny/2,nz/2)
   do k=1,nz
     do j=1,ny
       do i=1,nx
@@ -219,6 +228,7 @@ end subroutine
 !routine for charge deposition
 subroutine depose_rho_scalar(xa,ya,za,lostflag,rho,chrgpermacro,ilo,ihi,jlo,jhi,klo,khi,      &
                              dx,dy,dz,xmin,ymin,zmin,nraysp,ilogbl,jlogbl,klogbl,ifail)
+use mpi
 implicit none
 integer, intent(in) :: nraysp !!-!# of particles per MPI process
 integer, intent(in) :: ilogbl,jlogbl,klogbl
@@ -230,7 +240,11 @@ real(dp), intent(out), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
 real(dp) :: dx,dy,dz,xmin,ymin,zmin
 real(dp) :: dxi,dyi,dzi,ab,de,gh,sumrho
 integer :: n,ip,jp,kp
-integer :: myrank,ierr
+integer :: mprocs,myrank,ierr
+
+call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+
 ifail=0
 dxi=1.d0/dx
 dyi=1.d0/dy
@@ -260,7 +274,7 @@ do n=1,nraysp
   endif
 enddo
 rho=rho*chrgpermacro
-if(ifail.ne.0)write(6,*)'(depose_rho_scalar) ifail=',ifail
+if(ifail.ne.0)write(6,*)'(depose_rho_scalar) ifail=',ifail,' on process ',myrank
 
 end subroutine
 

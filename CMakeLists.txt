@@ -29,8 +29,8 @@ endif()
 
 
 #--------------------------------------------
-##option(MyOption "GetFFTW" OFF)
-##if(GetFFTW)
+option(GetFFTW "GetFFTW" ON)
+if(GetFFTW)
 
 # FFTW3 
 include(ExternalProject)
@@ -45,18 +45,22 @@ ExternalProject_Add(project_fftw
 
 ExternalProject_Get_Property(project_fftw install_dir)
 message(STATUS "fftw install_dir: " ${install_dir})
+
+# Libraries
 add_library(fftw STATIC IMPORTED)
 set_property(TARGET fftw PROPERTY IMPORTED_LOCATION ${install_dir}/lib/libfftw3.a)
 
 add_library(fftw_omp STATIC IMPORTED)
 set_property(TARGET fftw_omp PROPERTY IMPORTED_LOCATION ${install_dir}/lib/libfftw3_omp.a)
 
+
 add_dependencies(fftw project_fftw)
 include_directories(${install_dir}/include)
 
-
-##endif(GetFFTW)
+endif(GetFFTW)
 #--------------------------------------------
+
+
 
 
 #
@@ -65,17 +69,18 @@ include_directories(${install_dir}/include)
 
 file(GLOB_RECURSE sources  code/*.f90 code/*.h)
 add_executable(test_opensc ${sources})
+add_dependencies(test_opensc fftw)
 # Link FFTW
+#
 target_link_libraries(test_opensc fftw fftw_omp)
 
 
 
 # TEMP for Bmad: 
-SET (LIBRARY_OUTPUT_PATH /Users/chrisonian/Code/bmad_svn/debug/lib)
-#SET (Fortran_MODULE_DIRECTORY /Users/chrisonian/Code/bmad_svn/debug/modules)
-SET (CMAKE_Fortran_MODULE_DIRECTORY /Users/chrisonian/Code/bmad_svn/debug/modules)
+##SET (LIBRARY_OUTPUT_PATH /Users/chrisonian/Code/bmad_svn/debug/lib)
+##SET (CMAKE_Fortran_MODULE_DIRECTORY /Users/chrisonian/Code/bmad_svn/debug/modules)
 
 
 # Make a library
-add_library(opensc code/open_spacecharge_mod.f90 code/fft_interface_mod.f90)
+## add_library(opensc code/open_spacecharge_mod.f90 code/fft_interface_mod.f90)
 

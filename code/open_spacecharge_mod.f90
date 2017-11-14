@@ -36,7 +36,7 @@ contains
 !+
 
 subroutine deposit_bunch_on_mesh(xa, ya, za, lostflag,  charge, mesh3d)
-use mpi
+!use mpi
 type(mesh3d_struct) :: mesh3d
 real(dp) :: charge, chrgpermacro
 real(dp), dimension(:) :: xa, ya, za, lostflag 
@@ -45,8 +45,8 @@ integer :: nraysp,maxrayp
 integer :: error
 integer :: mprocs,myrank,ierr
 
-call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
-call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+!call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+!call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
 if (.not. allocated(mesh3d%charge)) then
   allocate(mesh3d%charge(mesh3d%n(1),mesh3d%n(2),mesh3d%n(3)))
@@ -127,7 +127,7 @@ end subroutine
 !------------------------------------------------------------------------
 subroutine getfields(rho,gam0,dx,dy,dz,phi,ex,ey,ez,bx,by,bz,nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc, &
                      ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl)
-use mpi
+!use mpi
 implicit none
 integer, intent(in) :: nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc
 integer, intent(in) :: ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl
@@ -141,8 +141,8 @@ integer :: i,j,k
 real(dp) :: gb0
 integer :: mprocs,myrank,ierr
 !
-call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
-call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+!call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+!call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
 
 gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
@@ -228,7 +228,7 @@ end subroutine
 !routine for charge deposition
 subroutine depose_rho_scalar(xa,ya,za,lostflag,rho,chrgpermacro,ilo,ihi,jlo,jhi,klo,khi,      &
                              dx,dy,dz,xmin,ymin,zmin,nraysp,ilogbl,jlogbl,klogbl,ifail)
-use mpi
+!use mpi
 implicit none
 integer, intent(in) :: nraysp !!-!# of particles per MPI process
 integer, intent(in) :: ilogbl,jlogbl,klogbl
@@ -242,8 +242,8 @@ real(dp) :: dxi,dyi,dzi,ab,de,gh,sumrho
 integer :: n,ip,jp,kp
 integer :: mprocs,myrank,ierr
 
-call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
-call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+!call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+!call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
 ifail=0
 dxi=1.d0/dx

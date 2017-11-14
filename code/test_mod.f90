@@ -15,7 +15,7 @@ contains
 
 
       subroutine gendist(ptcls,n1,nraysp,sigmat,gaussiancutoff,disttype,iseed)
-      use mpi
+     ! use mpi
       implicit none
       integer :: n1,nraysp,disttype,iseed
       real(8), dimension(nraysp,n1) :: ptcls
@@ -26,8 +26,8 @@ contains
       real(8), dimension(6) :: cent
       integer :: mprocs,myrank,ierr
       
-      call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
-      call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+     ! call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+     ! call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
       if(myrank.eq.0)print *, 'gendist'
       
@@ -92,13 +92,13 @@ contains
       end subroutine normdv
 !
       subroutine initrandom(inpseed)
-      use mpi
+    !  use mpi
       implicit none
       integer :: inpseed
       integer :: iseedsize,n,i
       integer, dimension(:), allocatable :: iputarray
       integer :: myrank,ierr
-      call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+   !   call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 ! determine the seed size and allocate the seed array:
       call random_seed(size=iseedsize)
       allocate(iputarray(iseedsize))

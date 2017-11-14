@@ -40,8 +40,8 @@ namelist / opensc_test_params / &
 ! Namelist defaults
 nx=64
 ny=64
-nz=64 
-e_tot = 100e6
+nz=64
+e_tot = 10e6
 n_particle = 1000000
 mc2 = 0.510998910d6
 bunch_charge=0.25d-9

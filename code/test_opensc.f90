@@ -105,7 +105,7 @@ call deposit_bunch_on_mesh(y(:,1),y(:,3), y(:,5), y(:,7), bunch_charge, mesh3d)
 print *, 'space charge field calc...'
 call space_charge_field_calc(mesh3d, direct_field_calc=direct_field_calc, integrated_green_function=integrated_green_function)
 print *, '...done'
-
+stop
 
 
 ! diagnostics:

@@ -1,6 +1,8 @@
 module open_spacecharge_mod
 
 use, intrinsic :: iso_fortran_env
+use fft_interface_mod
+!$ use omp_lib
 
 implicit none
 
@@ -445,7 +447,8 @@ crho2(ilo:ihi,jlo:jhi,klo:khi)=rho(ilo:ihi,jlo:jhi,klo:khi)
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
 !-!#else
-call ccfft3d(crho2,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
+!call ccfft3d(crho2,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
+call fftw_ccfft3d(crho2,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
 !-!#endif
 crho2(:,:,:)=ctmp2(:,:,:)  !now ctmp2 can be reused for next fft
 !
@@ -458,6 +461,14 @@ iloo=ilo_grn_gbl;ihii=ihi_grn_gbl; jloo=jlo_grn_gbl;jhii=jhi_grn_gbl; kloo=klo_g
 !-!#endif
 allocate(cgrn1(iloo:ihii,jloo:jhii,kloo:khii))
 !     write(6,*)'igfflag,icomp=',igfflag,icomp
+
+
+
+!$ print *, 'omp_get_max_threads(): ', omp_get_max_threads()
+!$ print *, 'Parallel Do'
+!$OMP PARALLEL DO &
+!$OMP DEFAULT(FIRSTPRIVATE), &
+!$OMP SHARED(cgrn1)
 do k=kloo,khii
   kp=klo_grn_gbl+mod(k-klo_grn_gbl+kperiod/2-1,kperiod)
   w=kp*dz
@@ -476,6 +487,10 @@ do k=kloo,khii
     enddo
   enddo
 enddo
+!$OMP END PARALLEL DO
+!$ print *, 'End Parallel Do'      
+      
+
       
 ! fft the Green function:
 !-!#ifdef MPIPARALLEL
@@ -484,7 +499,8 @@ enddo
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
 !-!# else
-call ccfft3d(cgrn1,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
+!call ccfft3d(cgrn1,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
+call fftw_ccfft3d(cgrn1,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
 !-!#endif
 ! multiply the fft'd charge density and green function:
 cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
@@ -496,7 +512,8 @@ cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
 !-!#else
-call ccfft3d(cphi2,ctmp2,[-1,-1,-1],iperiod,jperiod,kperiod,0)
+!call ccfft3d(cphi2,ctmp2,[-1,-1,-1],iperiod,jperiod,kperiod,0)
+call fftw_ccfft3d(cphi2,ctmp2,[-1,-1,-1],iperiod,jperiod,kperiod,0)
 !-!#endif
 cphi2(:,:,:)=ctmp2(:,:,:)/((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod))
 !
@@ -1014,22 +1031,6 @@ enddo
 
 end subroutine
 
-
-!------------------------------------------------------------------------
-!------------------------------------------------------------------------
-!+
-!
-!subroutine gsl_fft(cdata, n_size, i_sign)
-!implicit none
-!integer :: n_size
-!integer(fgsl_size_t):: n
-!complex(fgsl_double) :: cdata(n_size)
-!integer(fgsl_int) :: status, i_sign
-!
-!n = n_size
-!status = fgsl_fft_complex_radix2_transform(cdata, 1_fgsl_size_t, n, i_sign)
-!
-!end subroutine
 
 
 end module

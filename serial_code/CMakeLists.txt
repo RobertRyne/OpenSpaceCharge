@@ -76,11 +76,3 @@ target_link_libraries(test_opensc fftw fftw_omp)
 
 
 
-# TEMP for Bmad: 
-##SET (LIBRARY_OUTPUT_PATH /Users/chrisonian/Code/bmad_svn/debug/lib)
-##SET (CMAKE_Fortran_MODULE_DIRECTORY /Users/chrisonian/Code/bmad_svn/debug/modules)
-
-
-# Make a library
-## add_library(opensc code/open_spacecharge_mod.f90 code/fft_interface_mod.f90)
-

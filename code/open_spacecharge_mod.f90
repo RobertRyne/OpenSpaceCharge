@@ -13,255 +13,262 @@ integer, parameter, private :: qp = REAL128
 
 contains
 
-      subroutine getfields(rho,gam0,dx,dy,dz,phi,ex,ey,ez,hx,hy,hz,nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc, &
-     &                ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl)
-      use mpi
-      implicit none
-      integer, intent(in) :: nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc
-      integer, intent(in) :: ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl
-      real(dp), intent(in) :: gam0,dx,dy,dz
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+
+subroutine getfields(rho,gam0,dx,dy,dz,phi,ex,ey,ez,hx,hy,hz,nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc, &
+                ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl)
+use mpi
+implicit none
+integer, intent(in) :: nx,ny,nz,idecomp,npx,npy,npz,igfflag,idirectfieldcalc
+integer, intent(in) :: ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl
+real(dp), intent(in) :: gam0,dx,dy,dz
 !!!   real(dp), intent(in), dimension(nx,ny,nz) :: rho
 !!!   real(dp), intent(out), dimension(nx,ny,nz) :: phi,hx,hy,hz,ex,ey,ez
-      real(dp), intent(in), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
-      real(dp), intent(out), dimension(ilo:ihi,jlo:jhi,klo:khi) :: phi,hx,hy,hz,ex,ey,ez
-      integer :: icomp,ierr
-      real(dp), parameter :: clight=299792458.d0
-      real(dp), parameter :: mu0=8.d0*asin(1.d0)*1.d-7
-      integer :: i,j,k
-      real(dp) :: gb0
-      integer :: mprocs,myrank,mpierr
-      call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,mpierr)
-      call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,mpierr)
+real(dp), intent(in), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
+real(dp), intent(out), dimension(ilo:ihi,jlo:jhi,klo:khi) :: phi,hx,hy,hz,ex,ey,ez
+integer :: icomp,ierr
+real(dp), parameter :: clight=299792458.d0
+real(dp), parameter :: mu0=8.d0*asin(1.d0)*1.d-7
+integer :: i,j,k
+real(dp) :: gb0
+integer :: mprocs,myrank,mpierr
+call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,mpierr)
+call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,mpierr)
 
 
+gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
 
-
-
-      gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
-    
-      
-      if(idirectfieldcalc.eq.0)then
-      
-      
-        if(myrank.eq.0)write(6,*)'computing phi with OpenBC'
-        icomp=0
-  !
-
-
-        call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
-        do k=klo,khi-1 !fixed; was 1,nz in serial code
-        do j=jlo,jhi-1 !fixed
-        do i=ilo,ihi-1 !fixed. and fixed in loops below too
-          if(icomp.eq.0)then
+if(idirectfieldcalc.eq.0)then
+  if(myrank.eq.0)write(6,*)'computing phi with OpenBC'
+  icomp=0
+  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+         ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+ 
+  do k=klo,khi-1 !fixed; was 1,nz in serial code
+    do j=jlo,jhi-1 !fixed
+      do i=ilo,ihi-1 !fixed. and fixed in loops below too
+        if(icomp.eq.0)then
           ex(i,j,k)=-(phi(i+1,j,k)-phi(i,j,k))/dx*gam0  !if desired, edit for centered difference and increment starting do index
           ey(i,j,k)=-(phi(i,j+1,k)-phi(i,j,k))/dy*gam0  !ditto
           ez(i,j,k)=-(phi(i,j,k+1)-phi(i,j,k))/dz/gam0  !ditto
-          endif
-        enddo
-        enddo
-        enddo
-      endif
-      if(idirectfieldcalc.eq.1)then
-        if(myrank.eq.0)write(6,*)'computing Ex,Ey,Ez with OpenBC'
-        icomp=1
+        endif
+    enddo
+  enddo
+  enddo
+endif
+  
+if(idirectfieldcalc.eq.1)then
+  if(myrank.eq.0)write(6,*)'computing Ex,Ey,Ez with OpenBC'
 
-        
-        call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+  icomp=1 
+  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+  ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
 
-      
-        do k=klo,khi
-        do j=jlo,jhi
-        do i=ilo,ihi
-          ex(i,j,k)=phi(i,j,k)
-        enddo
-        enddo
-        enddo
-        icomp=2
-        call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
-        do k=klo,khi
-        do j=jlo,jhi
-        do i=ilo,ihi
-          ey(i,j,k)=phi(i,j,k)
-        enddo
-        enddo
-        enddo
-        icomp=3
-        call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
-        do k=klo,khi
-        do j=jlo,jhi
-        do i=ilo,ihi
-          ez(i,j,k)=phi(i,j,k)
-        enddo
-        enddo
-        enddo
-      endif
-! set the magnetic field:
-      do k=klo,khi
-      do j=jlo,jhi
+  do k=klo,khi
+    do j=jlo,jhi
       do i=ilo,ihi
-        hx(i,j,k)=-ey(i,j,k)/clight/mu0*gb0/gam0
-        hy(i,j,k)= ex(i,j,k)/clight/mu0*gb0/gam0
-        hz(i,j,k)=0.d0
+        ex(i,j,k)=phi(i,j,k)
       enddo
+     enddo
+   enddo
+   
+  icomp=2
+  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+  do k=klo,khi
+    do j=jlo,jhi
+      do i=ilo,ihi
+        ey(i,j,k)=phi(i,j,k)
       enddo
+    enddo
+  enddo
+        
+  icomp=3
+  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+  do k=klo,khi
+    do j=jlo,jhi
+      do i=ilo,ihi
+        ez(i,j,k)=phi(i,j,k)
       enddo
-      return
-      end subroutine getfields
+    enddo
+  enddo
+  
+endif
+      
+! set the magnetic field:
+do k=klo,khi
+  do j=jlo,jhi
+    do i=ilo,ihi
+      hx(i,j,k)=-ey(i,j,k)/clight/mu0*gb0/gam0
+      hy(i,j,k)= ex(i,j,k)/clight/mu0*gb0/gam0
+      hz(i,j,k)=0.d0
+    enddo
+  enddo
+enddo
 
-      subroutine openbcpotential(rho,phi,gam,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &           ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
-      use mpi
-      use decomposition_mod
-      implicit none
-      real(dp) :: gam,dx,dy,dz
-      integer :: ilo,ihi,jlo,jhi,klo,khi
-      integer :: ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr
-      real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho,phi
+end subroutine getfields
+
+
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+subroutine openbcpotential(rho,phi,gam,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+           ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+use mpi
+use decomposition_mod
+implicit none
+real(dp) :: gam,dx,dy,dz
+integer :: ilo,ihi,jlo,jhi,klo,khi
+integer :: ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr
+real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho,phi
 !
-      complex(dp), allocatable, dimension(:,:,:) :: crho2,ctmp2,cphi2,cgrn1 !what is the "1" for in cgrn1?
-      integer :: ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl
-      integer :: ilo_phi_gbl,ihi_phi_gbl,jlo_phi_gbl,jhi_phi_gbl,klo_phi_gbl,khi_phi_gbl
-      integer :: ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl
-      integer :: ilo2,ihi2,jlo2,jhi2,klo2,khi2
-      integer :: iloo,ihii,jloo,jhii,kloo,khii
-      integer :: iperiod,jperiod,kperiod,n
-      integer :: idecomp_in,idecomp_out,idirection,ipermute,iscale
-      integer :: in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi
-      integer :: out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi
-      real(dp) :: time
-      integer :: i,j,k,ip,jp,kp,ndx
-      real(dp) :: u,v,w,gval
+complex(dp), allocatable, dimension(:,:,:) :: crho2,ctmp2,cphi2,cgrn1 !what is the "1" for in cgrn1?
+integer :: ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl
+integer :: ilo_phi_gbl,ihi_phi_gbl,jlo_phi_gbl,jhi_phi_gbl,klo_phi_gbl,khi_phi_gbl
+integer :: ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl
+integer :: ilo2,ihi2,jlo2,jhi2,klo2,khi2
+integer :: iloo,ihii,jloo,jhii,kloo,khii
+integer :: iperiod,jperiod,kperiod,n
+integer :: idecomp_in,idecomp_out,idirection,ipermute,iscale
+integer :: in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi
+integer :: out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi
+real(dp) :: time
+integer :: i,j,k,ip,jp,kp,ndx
+real(dp) :: u,v,w,gval
 !     real(dp), external :: coulombfun,igfcoulombfun !I prefer not to have an external directive, alternative is to use a module
 !     real(dp), external :: igfexfun,igfeyfun,igfezfun
-      integer :: mprocs,myrank
-      real(dp), parameter :: econst=299792458.d0**2*1.d-7
+integer :: mprocs,myrank
+real(dp), parameter :: econst=299792458.d0**2*1.d-7
 !
 
-    
-      call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
-      call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+
+call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
 !
-      ilo_rho2_gbl=ilo_rho_gbl
-      jlo_rho2_gbl=jlo_rho_gbl
-      klo_rho2_gbl=jlo_rho_gbl
-      ihi_rho2_gbl=ilo_rho2_gbl+2*(ihi_rho_gbl-ilo_rho_gbl+1)-1
-      jhi_rho2_gbl=jlo_rho2_gbl+2*(jhi_rho_gbl-jlo_rho_gbl+1)-1
-      khi_rho2_gbl=klo_rho2_gbl+2*(khi_rho_gbl-klo_rho_gbl+1)-1
+ilo_rho2_gbl=ilo_rho_gbl
+jlo_rho2_gbl=jlo_rho_gbl
+klo_rho2_gbl=jlo_rho_gbl
+ihi_rho2_gbl=ilo_rho2_gbl+2*(ihi_rho_gbl-ilo_rho_gbl+1)-1
+jhi_rho2_gbl=jlo_rho2_gbl+2*(jhi_rho_gbl-jlo_rho_gbl+1)-1
+khi_rho2_gbl=klo_rho2_gbl+2*(khi_rho_gbl-klo_rho_gbl+1)-1
 !
-      ilo_phi_gbl=ilo_rho_gbl
-      ihi_phi_gbl=ihi_rho_gbl
-      jlo_phi_gbl=jlo_rho_gbl
-      jhi_phi_gbl=jhi_rho_gbl
-      klo_phi_gbl=klo_rho_gbl
-      khi_phi_gbl=khi_rho_gbl
+ilo_phi_gbl=ilo_rho_gbl
+ihi_phi_gbl=ihi_rho_gbl
+jlo_phi_gbl=jlo_rho_gbl
+jhi_phi_gbl=jhi_rho_gbl
+klo_phi_gbl=klo_rho_gbl
+khi_phi_gbl=khi_rho_gbl
 !
-      ilo_grn_gbl=ilo_phi_gbl-ihi_rho_gbl
-      ihi_grn_gbl=ihi_phi_gbl-ilo_rho_gbl+1 !+1 is padding
-      jlo_grn_gbl=jlo_phi_gbl-jhi_rho_gbl
-      jhi_grn_gbl=jhi_phi_gbl-jlo_rho_gbl+1 !+1 is padding
-      klo_grn_gbl=klo_phi_gbl-khi_rho_gbl
-      khi_grn_gbl=khi_phi_gbl-klo_rho_gbl+1 !+1 is padding
+ilo_grn_gbl=ilo_phi_gbl-ihi_rho_gbl
+ihi_grn_gbl=ihi_phi_gbl-ilo_rho_gbl+1 !+1 is padding
+jlo_grn_gbl=jlo_phi_gbl-jhi_rho_gbl
+jhi_grn_gbl=jhi_phi_gbl-jlo_rho_gbl+1 !+1 is padding
+klo_grn_gbl=klo_phi_gbl-khi_rho_gbl
+khi_grn_gbl=khi_phi_gbl-klo_rho_gbl+1 !+1 is padding
 !
-      iperiod=ihi_rho2_gbl-ilo_rho2_gbl+1
-      jperiod=jhi_rho2_gbl-jlo_rho2_gbl+1
-      kperiod=khi_rho2_gbl-klo_rho2_gbl+1
+iperiod=ihi_rho2_gbl-ilo_rho2_gbl+1
+jperiod=jhi_rho2_gbl-jlo_rho2_gbl+1
+kperiod=khi_rho2_gbl-klo_rho2_gbl+1
 !
  
 !allocate the double-size complex array crho2:
-      call decompose(myrank,mprocs,ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,&
-     &               idecomp,npx,npy,npz,ilo2,ihi2,jlo2,jhi2,klo2,khi2)
+call decompose(myrank,mprocs,ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,&
+               idecomp,npx,npy,npz,ilo2,ihi2,jlo2,jhi2,klo2,khi2)
 
-   
-      
-      allocate(crho2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
-      allocate(ctmp2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
-      allocate(cphi2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
+
+
+allocate(crho2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
+allocate(ctmp2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
+allocate(cphi2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
 !
 
 !store rho in a double-size complex array:
-      call movetodoublesizer2c(rho,crho2,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2, &
-     &                         ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz)
+call movetodoublesizer2c(rho,crho2,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2, &
+                         ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz)
 !
 !!prepare for fft:
-      idecomp_in=idecomp
-      idecomp_out=idecomp
-      idirection=1
-      ipermute=0
-      iscale=0
-      call decompose(myrank,mprocs, &
-     & ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl, &
-     & idecomp_in,npx,npy,npz,in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi)
-      call decompose(myrank,mprocs, &
-     & ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl, &
-     & idecomp_out,npx,npy,npz,out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi)
+idecomp_in=idecomp
+idecomp_out=idecomp
+idirection=1
+ipermute=0
+iscale=0
+call decompose(myrank,mprocs, &
+               ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl, &
+               idecomp_in,npx,npy,npz,in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi)
+call decompose(myrank,mprocs, &
+               ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl, &
+               idecomp_out,npx,npy,npz,out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi)
 !
 
 
 
 ! fft the charge density:
-      call fft_perform(crho2,ctmp2,idirection,iperiod,jperiod,kperiod,  &
-     &     in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
-     &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
-     &     ipermute,iscale,time)
+call fft_perform(crho2,ctmp2,idirection,iperiod,jperiod,kperiod,  &
+     in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
+     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
+     ipermute,iscale,time)
 
 
-      crho2(:,:,:)=ctmp2(:,:,:)  !now ctmp2 can be reused for next fft
+crho2(:,:,:)=ctmp2(:,:,:)  !now ctmp2 can be reused for next fft
 !
 
 
 
 ! compute the Green function (called cgrn1 below):
-      call decompose(myrank,mprocs,& !why does the following line contain rho2 indices?????
-     &ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl,idecomp,npx,npy,npz,iloo,ihii,jloo,jhii,kloo,khii)
-      allocate(cgrn1(iloo:ihii,jloo:jhii,kloo:khii))
+call decompose(myrank,mprocs,& !why does the following line contain rho2 indices?????
+ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl,idecomp,npx,npy,npz,iloo,ihii,jloo,jhii,kloo,khii)
+allocate(cgrn1(iloo:ihii,jloo:jhii,kloo:khii))
 !     write(6,*)'igfflag,icomp=',igfflag,icomp
-      do k=kloo,khii
-        kp=klo_grn_gbl+mod(k-klo_grn_gbl+kperiod/2-1,kperiod)
-        w=kp*dz
-        do j=jloo,jhii
-          jp=jlo_grn_gbl+mod(j-jlo_grn_gbl+jperiod/2-1,jperiod)
-          v=jp*dy
-         do i=iloo,ihii
-           ip=ilo_grn_gbl+mod(i-ilo_grn_gbl+iperiod/2-1,iperiod)
-           u=ip*dx
-           if(igfflag.eq.0.and.icomp.eq.0)gval=coulombfun(u,v,w,gam)
-           if(igfflag.eq.1.and.icomp.eq.0)gval=igfcoulombfun(u,v,w,gam,dx,dy,dz)
-           if(igfflag.eq.1.and.icomp.eq.1)gval=igfexfun(u,v,w,gam,dx,dy,dz)
-           if(igfflag.eq.1.and.icomp.eq.2)gval=igfeyfun(u,v,w,gam,dx,dy,dz)
-           if(igfflag.eq.1.and.icomp.eq.3)gval=igfezfun(u,v,w,gam,dx,dy,dz)
-           cgrn1(i,j,k)=cmplx(gval,0.d0)
-          enddo
-        enddo
-      enddo
+do k=kloo,khii
+  kp=klo_grn_gbl+mod(k-klo_grn_gbl+kperiod/2-1,kperiod)
+  w=kp*dz
+  do j=jloo,jhii
+    jp=jlo_grn_gbl+mod(j-jlo_grn_gbl+jperiod/2-1,jperiod)
+    v=jp*dy
+   do i=iloo,ihii
+     ip=ilo_grn_gbl+mod(i-ilo_grn_gbl+iperiod/2-1,iperiod)
+     u=ip*dx
+     if(igfflag.eq.0.and.icomp.eq.0)gval=coulombfun(u,v,w,gam)
+     if(igfflag.eq.1.and.icomp.eq.0)gval=igfcoulombfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.1)gval=igfexfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.2)gval=igfeyfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.3)gval=igfezfun(u,v,w,gam,dx,dy,dz)
+     cgrn1(i,j,k)=cmplx(gval,0.d0)
+    enddo
+  enddo
+enddo
       
       
       
 ! fft the Green function:
-      call fft_perform(cgrn1,ctmp2,idirection,iperiod,jperiod,kperiod,  &
-     &     in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
-     &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
-     &     ipermute,iscale,time)
+call fft_perform(cgrn1,ctmp2,idirection,iperiod,jperiod,kperiod,  &
+     in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
+     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
+     ipermute,iscale,time)
 ! multiply the fft'd charge density and green function:
-      cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
+cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
 ! now do the inverse fft:
-      idirection=-1
-      call fft_perform(cphi2,ctmp2,idirection,iperiod,jperiod,kperiod,    &
-     &     in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
-     &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
-     &     ipermute,iscale,time)
-      cphi2(:,:,:)=ctmp2(:,:,:)/((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod)) !why put ctmp2 in cphi2???  just use cphi2
+idirection=-1
+call fft_perform(cphi2,ctmp2,idirection,iperiod,jperiod,kperiod,    &
+     in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
+     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
+     ipermute,iscale,time)
+cphi2(:,:,:)=ctmp2(:,:,:)/((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod)) !why put ctmp2 in cphi2???  just use cphi2
 !
 !store the physical portion of the double-size complex array in a non-double-size real array:
-      call movetosinglesizec2r(cphi2,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo,ihi,jlo,jhi,klo,khi, &
-     &                         ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz)
-      phi(:,:,:)=phi(:,:,:)*econst    !better to divide here by iperiod*jperiod*period
-      return
-      end subroutine openbcpotential
+call movetosinglesizec2r(cphi2,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo,ihi,jlo,jhi,klo,khi, &
+                         ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz)
+phi(:,:,:)=phi(:,:,:)*econst    !better to divide here by iperiod*jperiod*period
+
+end subroutine openbcpotential
 !
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
@@ -505,256 +512,262 @@ end function zlafun
 !------------------------------------------------------------------------
 !+
 
-      subroutine movetodoublesizer2c(rho,crho2,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2, &
-     &           ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz)
-      use mpi
-      use data_movement_mod, only : lowner,dmrgrnk
-      implicit none
-      integer :: ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2
-      integer :: ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz
-      real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
-      complex(dp), dimension(ilo2:ihi2,jlo2:jhi2,klo2:khi2) :: crho2
+subroutine movetodoublesizer2c(rho,crho2,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2, &
+           ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz)
+use mpi
+use data_movement_mod, only : lowner,dmrgrnk
+implicit none
+integer :: ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2
+integer :: ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz
+real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
+complex(dp), dimension(ilo2:ihi2,jlo2:jhi2,klo2:khi2) :: crho2
 !%%   integer, allocatable, dimension(:) :: iloa,ihia,jloa,jhia,kloa,khia
 !#    real(dp), dimension(1:2,1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: gstuff,gtmp
-      integer, dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: iownermesh1d,itmp,irnk
-      real(dp), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: rownermesh1d
-      real(dp), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: rhotmp,rtmp
-      integer(INT64), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: indxtmp,jtmp
-      integer :: numvals,ifail
-      integer :: n,i,j,k,itot,jtot,iold,jold,kold
-      real(dp) :: aitot,ajtot
+integer, dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: iownermesh1d,itmp,irnk
+real(dp), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: rownermesh1d
+real(dp), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: rhotmp,rtmp
+integer(INT64), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: indxtmp,jtmp
+integer :: numvals,ifail
+integer :: n,i,j,k,itot,jtot,iold,jold,kold
+real(dp) :: aitot,ajtot
 !     integer, external :: iowner    !I prefer not to have an external directive, alternative is to use a module
 !     integer, external :: lowner    !I prefer not to have an external directive, alternative is to use a module
-      integer :: nxtot,nytot,nztot
-      real(dp) :: recipnx,recipny,recipnz,recipnxnpx,recipnynpy,recipnznpz
-      integer :: mprocs,myrank,ierr
-      integer :: iticks1,iticks2
-      integer, allocatable :: sdisp(:),scounts(:),rdisp(:),rcounts(:)
-      integer :: ssize,rsize
-      call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
-      call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
-      crho2(:,:,:)=(0.d0,0.d0) !this is important, since only data from the physical region will be moved
+integer :: nxtot,nytot,nztot
+real(dp) :: recipnx,recipny,recipnz,recipnxnpx,recipnynpy,recipnznpz
+integer :: mprocs,myrank,ierr
+integer :: iticks1,iticks2
+integer, allocatable :: sdisp(:),scounts(:),rdisp(:),rcounts(:)
+integer :: ssize,rsize
+call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+crho2(:,:,:)=(0.d0,0.d0) !this is important, since only data from the physical region will be moved
 !
-      allocate(sdisp(0:mprocs-1),scounts(0:mprocs-1),rdisp(0:mprocs-1),rcounts(0:mprocs-1))
+allocate(sdisp(0:mprocs-1),scounts(0:mprocs-1),rdisp(0:mprocs-1),rcounts(0:mprocs-1))
 !%%   allocate(iloa(0:mprocs-1),ihia(0:mprocs-1),jloa(0:mprocs-1),jhia(0:mprocs-1),kloa(0:mprocs-1),khia(0:mprocs-1))
 !%%   do n=0,mprocs-1
 !%%    call decompose(n,mprocs,ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,&
 !%%  &                 idecomp,npx,npy,npz,iloa(n),ihia(n),jloa(n),jhia(n),kloa(n),khia(n))
 !%%   enddo
-      itot=ihi_rho2_gbl-ilo_rho2_gbl+1
-      jtot=jhi_rho2_gbl-jlo_rho2_gbl+1
-      aitot=1.d0*itot
-      ajtot=1.d0*jtot
+itot=ihi_rho2_gbl-ilo_rho2_gbl+1
+jtot=jhi_rho2_gbl-jlo_rho2_gbl+1
+aitot=1.d0*itot
+ajtot=1.d0*jtot
 !     if(myrank.eq.0)write(6,*)'(movetodouble) itot,jtot=',itot,jtot
-      n=0
-      nxtot=ihi_rho2_gbl-ilo_rho2_gbl+1
-      nytot=jhi_rho2_gbl-jlo_rho2_gbl+1
-      nztot=khi_rho2_gbl-klo_rho2_gbl+1
-      recipnx=1.d0/nxtot
-      recipny=1.d0/nytot
-      recipnz=1.d0/nztot
-      recipnxnpx=recipnx*npx
-      recipnynpy=recipny*npy
-      recipnznpz=recipnz*npz
+n=0
+nxtot=ihi_rho2_gbl-ilo_rho2_gbl+1
+nytot=jhi_rho2_gbl-jlo_rho2_gbl+1
+nztot=khi_rho2_gbl-klo_rho2_gbl+1
+recipnx=1.d0/nxtot
+recipny=1.d0/nytot
+recipnz=1.d0/nztot
+recipnxnpx=recipnx*npx
+recipnynpy=recipny*npy
+recipnznpz=recipnz*npz
 !     call system_clock(count=iticks1)
-      do k=klo,khi
-      do j=jlo,jhi
-      do i=ilo,ihi
-        n=n+1
-!#      gstuff(1,n)=rho(i,j,k)
-!#      gstuff(2,n)=(k-1)*aitot*ajtot + (j-1)*aitot + i !FIXED fixed
-        rhotmp(n)=rho(i,j,k)
-        indxtmp(n)=(k-1)*aitot*ajtot + (j-1)*aitot + i !FIXED fixed
-!       iownermesh1d(n)=iowner(iloa,ihia,jloa,jhia,kloa,khia,mprocs,&
+do k=klo,khi
+  do j=jlo,jhi
+    do i=ilo,ihi
+      n=n+1
+!#    gstuff(1,n)=rho(i,j,k)
+!#    gstuff(2,n)=(k-1)*aitot*ajtot + (j-1)*aitot + i !FIXED fixed
+      rhotmp(n)=rho(i,j,k)
+      indxtmp(n)=(k-1)*aitot*ajtot + (j-1)*aitot + i !FIXED fixed
+!     iownermesh1d(n)=iowner(iloa,ihia,jloa,jhia,kloa,khia,mprocs,&
 !    &       ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,i,j,k)
-        iownermesh1d(n)=lowner(recipnxnpx,recipnynpy,recipnznpz,npx,npy,i,j,k)
-      enddo
-      enddo
-      enddo
+      iownermesh1d(n)=lowner(recipnxnpx,recipnynpy,recipnznpz,npx,npy,i,j,k)
+    enddo
+  enddo
+enddo
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetodoubletripledo',iticks2-iticks1)
 !!!!!now that I know who owns it, sort the array:
 !     call system_clock(count=iticks1)
-      itmp(1:n)=iownermesh1d(1:n)
-      rownermesh1d(1:n)=iownermesh1d(1:n)
+itmp(1:n)=iownermesh1d(1:n)
+rownermesh1d(1:n)=iownermesh1d(1:n)
 !#    gtmp(1:2,1:n)=gstuff(1:2,1:n)
-      jtmp(1:n)=indxtmp(1:n)
-      rtmp(1:n)=rhotmp(1:n)
+jtmp(1:n)=indxtmp(1:n)
+rtmp(1:n)=rhotmp(1:n)
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetodoublepredmrgrnk',iticks2-iticks1)
 !     call system_clock(count=iticks1)
-      call dmrgrnk(rownermesh1d,irnk,n,n)
+call dmrgrnk(rownermesh1d,irnk,n,n)
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetodoubledmrgrnk',iticks2-iticks1)
 !     call system_clock(count=iticks1)
-      do k=1,n
-        iownermesh1d(k)=itmp(irnk(k))
+do k=1,n
+  iownermesh1d(k)=itmp(irnk(k))
 !#      gstuff(1:2,k)=gtmp(1:2,irnk(k))
-        indxtmp(k)=jtmp(irnk(k))
-        rhotmp(k)=rtmp(irnk(k))
-      enddo
+  indxtmp(k)=jtmp(irnk(k))
+ rhotmp(k)=rtmp(irnk(k))
+enddo
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetodoubleafterdmrgrnk',iticks2-iticks1)
 ! create the send count array:
-      scounts(0:mprocs-1)=0
-      do k=1,n
-        scounts(iownermesh1d(k))=scounts(iownermesh1d(k))+1
-      enddo
+scounts(0:mprocs-1)=0
+do k=1,n
+  scounts(iownermesh1d(k))=scounts(iownermesh1d(k))+1
+enddo
 ! tell the other procs how much data is coming:
-      call MPI_alltoall(scounts,1,MPI_INTEGER,rcounts,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+call MPI_alltoall(scounts,1,MPI_INTEGER,rcounts,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 ! create the send- and receive-displacement arrays:
-      sdisp(0)=0
-      do i=1,mprocs-1
-        sdisp(i)=scounts(i-1)+sdisp(i-1)
-      enddo
-      rdisp(0)=0
-      do i=1,mprocs-1
-        rdisp(i)=rcounts(i-1)+rdisp(i-1)
-      enddo
+sdisp(0)=0
+do i=1,mprocs-1
+  sdisp(i)=scounts(i-1)+sdisp(i-1)
+enddo
+rdisp(0)=0
+do i=1,mprocs-1
+  rdisp(i)=rcounts(i-1)+rdisp(i-1)
+enddo
 ! send and receive counts:
-      ssize=sum(scounts)
-      rsize=sum(rcounts)
+ssize=sum(scounts)
+rsize=sum(rcounts)
 !
 !     call system_clock(count=iticks1)
-      call MPI_alltoallv(indxtmp,scounts,sdisp,MPI_INTEGER8,jtmp,rcounts,rdisp,MPI_INTEGER8,MPI_COMM_WORLD,ierr)
-      call MPI_alltoallv(rhotmp,scounts,sdisp,MPI_DOUBLE,rtmp,rcounts,rdisp,MPI_DOUBLE,MPI_COMM_WORLD,ierr)
+call MPI_alltoallv(indxtmp,scounts,sdisp,MPI_INTEGER8,jtmp,rcounts,rdisp,MPI_INTEGER8,MPI_COMM_WORLD,ierr)
+call MPI_alltoallv(rhotmp,scounts,sdisp,MPI_DOUBLE,rtmp,rcounts,rdisp,MPI_DOUBLE,MPI_COMM_WORLD,ierr)
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetodoublealltoallv',iticks2-iticks1)
 !     numvals=size(rho,1)*size(rho,2)*size(rho,3) !the number of values to be moved
 !     write(7000+myrank,*)ssize,rsize,numvals
 !     flush(7000+myrank)
 !     call system_clock(count=iticks1)
-      do n=1,rsize
-        i=mod(jtmp(n)-1,int(itot, int64))+1
-        j=mod((jtmp(n)-1)/itot,int(jtot, int64))+1
-        k=(jtmp(n)-1)/(itot*jtot)+1
+do n=1,rsize
+  i=mod(jtmp(n)-1,int(itot, int64))+1
+  j=mod((jtmp(n)-1)/itot,int(jtot, int64))+1
+  k=(jtmp(n)-1)/(itot*jtot)+1
 !       k=(jtmp(n)-1)/(itot*jtot)+1
 !       j=(jtmp(n)-1-(k-1)*itot*jtot)/itot + 1
 !       i=jtmp(n)-(k-1)*itot*jtot-(j-1)*itot
-        crho2(i,j,k)=rtmp(n) !recall that crho2 is initialized to zero previously, as required.
-      enddo
+  crho2(i,j,k)=rtmp(n) !recall that crho2 is initialized to zero previously, as required.
+enddo
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetodoublefinaldo',iticks2-iticks1)
-      return
-      end
-!
-      subroutine movetosinglesizec2r(crho2,rho,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo,ihi,jlo,jhi,klo,khi, &
-     &                         ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz)
-      use mpi
-      use data_movement_mod, only : lowner,dmrgrnk
-      implicit none
-      integer, parameter :: idebug=0
-      integer :: ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2
-      integer :: ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz
-      real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
-      complex(dp), dimension(ilo2:ihi2,jlo2:jhi2,klo2:khi2) :: crho2
+
+end subroutine
+
+
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+subroutine movetosinglesizec2r(crho2,rho,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo,ihi,jlo,jhi,klo,khi, &
+                         ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz)
+use mpi
+use data_movement_mod, only : lowner,dmrgrnk
+implicit none
+integer, parameter :: idebug=0
+integer :: ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2
+integer :: ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz
+real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
+complex(dp), dimension(ilo2:ihi2,jlo2:jhi2,klo2:khi2) :: crho2
 !%%   integer, allocatable, dimension(:) :: iloa,ihia,jloa,jhia,kloa,khia
 !#    real(dp), dimension(1:2,1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: gstuff,gtmp
-      integer, dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: iownermesh1d,itmp,irnk
-      real(dp), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: rownermesh1d
-      real(dp), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: rhotmp,rtmp
-      integer(INT64), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: indxtmp,jtmp
-      integer :: numvals,ifail
-      integer :: n,i,j,k,ngbl,nsize,nsizegbl,itot,jtot,iold,jold,kold
-      real(dp) :: aitot,ajtot
+integer, dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: iownermesh1d,itmp,irnk
+real(dp), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: rownermesh1d
+real(dp), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: rhotmp,rtmp
+integer(INT64), dimension(1:8*size(rho,1)*size(rho,2)*size(rho,3)) :: indxtmp,jtmp
+integer :: numvals,ifail
+integer :: n,i,j,k,ngbl,nsize,nsizegbl,itot,jtot,iold,jold,kold
+real(dp) :: aitot,ajtot
 !     integer, external :: iowner    !I prefer not to have an external directive, alternative is to use a module
 !     integer, external :: lowner    !I prefer not to have an external directive, alternative is to use a module
-      integer :: nxtot,nytot,nztot
-      real(dp) :: recipnx,recipny,recipnz,recipnxnpx,recipnynpy,recipnznpz
-      integer :: mprocs,myrank,ierr
-      integer :: iticks1,iticks2
-      integer, allocatable :: sdisp(:),scounts(:),rdisp(:),rcounts(:)
-      integer :: ssize,rsize
-      call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
-      call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+integer :: nxtot,nytot,nztot
+real(dp) :: recipnx,recipny,recipnz,recipnxnpx,recipnynpy,recipnznpz
+integer :: mprocs,myrank,ierr
+integer :: iticks1,iticks2
+integer, allocatable :: sdisp(:),scounts(:),rdisp(:),rcounts(:)
+integer :: ssize,rsize
+call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
 !
-      rho(:,:,:)=0.d0 !not necessary but it doesn't hurt, makes this routine look like the other
+rho(:,:,:)=0.d0 !not necessary but it doesn't hurt, makes this routine look like the other
 !
-      allocate(sdisp(0:mprocs-1),scounts(0:mprocs-1),rdisp(0:mprocs-1),rcounts(0:mprocs-1))
+allocate(sdisp(0:mprocs-1),scounts(0:mprocs-1),rdisp(0:mprocs-1),rcounts(0:mprocs-1))
 !%%   allocate(iloa(0:mprocs-1),ihia(0:mprocs-1),jloa(0:mprocs-1),jhia(0:mprocs-1),kloa(0:mprocs-1),khia(0:mprocs-1))
 !%%   do n=0,mprocs-1
 !%%    call decompose(n,mprocs,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,&
 !%%  &                 idecomp,npx,npy,npz,iloa(n),ihia(n),jloa(n),jhia(n),kloa(n),khia(n))
 !%%   enddo
-      itot=ihi_rho_gbl-ilo_rho_gbl+1
-      jtot=jhi_rho_gbl-jlo_rho_gbl+1
-      aitot=1.d0*itot
-      ajtot=1.d0*jtot
+itot=ihi_rho_gbl-ilo_rho_gbl+1
+jtot=jhi_rho_gbl-jlo_rho_gbl+1
+aitot=1.d0*itot
+ajtot=1.d0*jtot
 !     if(myrank.eq.0)write(6,*)'(movetosingle) itot,jtot=',itot,jtot
-      n=0
-      nxtot=ihi_rho_gbl-ilo_rho_gbl+1
-      nytot=jhi_rho_gbl-jlo_rho_gbl+1
-      nztot=khi_rho_gbl-klo_rho_gbl+1
-      recipnx=1.d0/nxtot
-      recipny=1.d0/nytot
-      recipnz=1.d0/nztot
-      recipnxnpx=recipnx*npx
-      recipnynpy=recipny*npy
-      recipnznpz=recipnz*npz
+n=0
+nxtot=ihi_rho_gbl-ilo_rho_gbl+1
+nytot=jhi_rho_gbl-jlo_rho_gbl+1
+nztot=khi_rho_gbl-klo_rho_gbl+1
+recipnx=1.d0/nxtot
+recipny=1.d0/nytot
+recipnz=1.d0/nztot
+recipnxnpx=recipnx*npx
+recipnynpy=recipny*npy
+recipnznpz=recipnz*npz
 !     call system_clock(count=iticks1)
-      do k=klo2,khi2
-      if(k.lt.klo_rho_gbl.or.k.gt.khi_rho_gbl)cycle !keep only the physical region
-      do j=jlo2,jhi2
-      if(j.lt.jlo_rho_gbl.or.j.gt.jhi_rho_gbl)cycle !keep only the physical region
-      do i=ilo2,ihi2
+do k=klo2,khi2
+  if(k.lt.klo_rho_gbl.or.k.gt.khi_rho_gbl)cycle !keep only the physical region
+  do j=jlo2,jhi2
+    if(j.lt.jlo_rho_gbl.or.j.gt.jhi_rho_gbl)cycle !keep only the physical region
+    do i=ilo2,ihi2
       if(i.lt.ilo_rho_gbl.or.i.gt.ihi_rho_gbl)cycle !keep only the physical region
-        n=n+1
+      n=n+1
 !#      if(n.gt.size(gstuff,2))write(6,*)'trouble'
 !#      gstuff(1,n)=real(crho2(i,j,k))
 !#      gstuff(2,n)=(k-1)*aitot*ajtot + (j-1)*aitot + i !FIXED fixed
-        rhotmp(n)=real(crho2(i,j,k))
-        indxtmp(n)=(k-1)*aitot*ajtot + (j-1)*aitot + i !FIXED fixed
+      rhotmp(n)=real(crho2(i,j,k))
+      indxtmp(n)=(k-1)*aitot*ajtot + (j-1)*aitot + i !FIXED fixed
 !true for rho but not for phi       if(gstuff(4,n).lt.0.d0)write(6,*)'(1) gstuff(4,n) error'
 !       iownermesh1d(n)=iowner(iloa,ihia,jloa,jhia,kloa,khia,mprocs,&
 !    &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,i,j,k)
-        iownermesh1d(n)=lowner(recipnxnpx,recipnynpy,recipnznpz,npx,npy,i,j,k)
-      enddo
-      enddo
-      enddo
+      iownermesh1d(n)=lowner(recipnxnpx,recipnynpy,recipnznpz,npx,npy,i,j,k)
+    enddo
+  enddo
+enddo
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetosingletripledo',iticks2-iticks1)
 !!!!!now that I know who owns it, sort the array:
-      itmp(1:n)=iownermesh1d(1:n)
-      rownermesh1d(1:n)=iownermesh1d(1:n)
+itmp(1:n)=iownermesh1d(1:n)
+rownermesh1d(1:n)=iownermesh1d(1:n)
 !#    gtmp(1:2,1:n)=gstuff(1:2,1:n)
-      jtmp(1:n)=indxtmp(1:n)
-      rtmp(1:n)=rhotmp(1:n)
+jtmp(1:n)=indxtmp(1:n)
+rtmp(1:n)=rhotmp(1:n)
 !     call system_clock(count=iticks1)
-      call dmrgrnk(rownermesh1d,irnk,n,n)
+call dmrgrnk(rownermesh1d,irnk,n,n)
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetosingledmrgrnk',iticks2-iticks1)
 !     call system_clock(count=iticks1)
-      do k=1,n
-        iownermesh1d(k)=itmp(irnk(k))
+do k=1,n
+  iownermesh1d(k)=itmp(irnk(k))
 !#      gstuff(1:2,k)=gtmp(1:2,irnk(k))
-        indxtmp(k)=jtmp(irnk(k))
-        rhotmp(k)=rtmp(irnk(k))
-      enddo
+  indxtmp(k)=jtmp(irnk(k))
+  rhotmp(k)=rtmp(irnk(k))
+enddo
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetosingleafterdmrgrnk',iticks2-iticks1)
 ! create the send count array:
-      scounts(0:mprocs-1)=0
-      do k=1,n
-        scounts(iownermesh1d(k))=scounts(iownermesh1d(k))+1
-      enddo
+scounts(0:mprocs-1)=0
+do k=1,n
+  scounts(iownermesh1d(k))=scounts(iownermesh1d(k))+1
+enddo
 ! tell the other procs how much data is coming:
-      call MPI_alltoall(scounts,1,MPI_INTEGER,rcounts,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+call MPI_alltoall(scounts,1,MPI_INTEGER,rcounts,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 ! create the send- and receive-displacement arrays:
-      sdisp(0)=0
-      do i=1,mprocs-1
-        sdisp(i)=scounts(i-1)+sdisp(i-1)
-      enddo
-      rdisp(0)=0
-      do i=1,mprocs-1
-        rdisp(i)=rcounts(i-1)+rdisp(i-1)
-      enddo
+sdisp(0)=0
+do i=1,mprocs-1
+  sdisp(i)=scounts(i-1)+sdisp(i-1)
+enddo
+rdisp(0)=0
+do i=1,mprocs-1
+  rdisp(i)=rcounts(i-1)+rdisp(i-1)
+enddo
 ! send and receive counts:
-      ssize=sum(scounts)
-      rsize=sum(rcounts)
+ssize=sum(scounts)
+rsize=sum(rcounts)
 !     call system_clock(count=iticks1)
 !#    call MPI_alltoallv(indxtmp,scounts,sdisp,MPI_INTEGER8,jtmp,rcounts,rdisp,MPI_INTEGER8,MPI_COMM_WORLD,ierr)
 !#    call MPI_alltoallv(rhotmp,scounts,sdisp,MPI_DOUBLE,rtmp,rcounts,rdisp,MPI_DOUBLE,MPI_COMM_WORLD,ierr)
-      call MPI_alltoallv(rhotmp,scounts,sdisp,MPI_DOUBLE,rho ,rcounts,rdisp,MPI_DOUBLE,MPI_COMM_WORLD,ierr)
+call MPI_alltoallv(rhotmp,scounts,sdisp,MPI_DOUBLE,rho ,rcounts,rdisp,MPI_DOUBLE,MPI_COMM_WORLD,ierr)
 !     call system_clock(count=iticks2)
 !     call elapsedmma('movetosinglealltoallv',iticks2-iticks1)
 !#    do n=1,rsize
@@ -763,7 +776,7 @@ end function zlafun
 !#      k=(jtmp(n)-1)/(itot*jtot)+1
 !#      rho(i,j,k)=rtmp(n)
 !#    enddo
-      return
-      end
+
+end subroutine
 
 end module

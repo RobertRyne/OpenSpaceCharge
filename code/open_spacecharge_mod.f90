@@ -11,6 +11,24 @@ integer, parameter, private :: sp = REAL32
 integer, parameter, private :: dp = REAL64
 integer, parameter, private :: qp = REAL128
 
+
+type field_struct
+  real(dp) :: E(3) = 0        ! electric field
+  real(dp) :: B(3) = 0        ! magnetic field
+end type
+
+type mesh3d_struct
+  real(dp) :: min(3)                    ! Minimim in each dimension
+  real(dp) :: max(3)                    ! Maximum in each dimension
+  real(dp) :: delta(3)                  ! Grid spacing
+  real(dp) :: gamma                     ! Relativistic gamma in the +z (3rd) direction
+  real(dp), allocatable, dimension(:,:,:) :: rho ! Charge density grid
+  real(dp), allocatable, dimension(:,:,:) :: phi ! electric potential grid
+  type(field_struct),  allocatable, dimension(:,:,:) :: field ! field grid
+end type
+
+
+
 contains
 
 
@@ -129,7 +147,7 @@ integer :: ilo,ihi,jlo,jhi,klo,khi
 integer :: ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr
 real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho,phi
 !
-complex(dp), allocatable, dimension(:,:,:) :: crho2,ctmp2,cphi2,cgrn1 !what is the "1" for in cgrn1?
+complex(dp), allocatable, dimension(:,:,:) :: crho2,cphi2,cgrn1 !what is the "1" for in cgrn1?
 integer :: ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl
 integer :: ilo_phi_gbl,ihi_phi_gbl,jlo_phi_gbl,jhi_phi_gbl,klo_phi_gbl,khi_phi_gbl
 integer :: ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl
@@ -142,8 +160,7 @@ integer :: out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi
 real(dp) :: time
 integer :: i,j,k,ip,jp,kp,ndx
 real(dp) :: u,v,w,gval
-!     real(dp), external :: coulombfun,igfcoulombfun !I prefer not to have an external directive, alternative is to use a module
-!     real(dp), external :: igfexfun,igfeyfun,igfezfun
+
 integer :: mprocs,myrank
 real(dp), parameter :: econst=299792458.d0**2*1.d-7
 !
@@ -187,10 +204,7 @@ kperiod=khi_rho2_gbl-klo_rho2_gbl+1
 call decompose(myrank,mprocs,ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,&
                idecomp,npx,npy,npz,ilo2,ihi2,jlo2,jhi2,klo2,khi2)
 
-
-
 allocate(crho2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
-allocate(ctmp2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
 allocate(cphi2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
 !
 
@@ -207,28 +221,23 @@ iscale=0
 call decompose(myrank,mprocs, &
                ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl, &
                idecomp_in,npx,npy,npz,in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi)
-call decompose(myrank,mprocs, &
-               ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl, &
-               idecomp_out,npx,npy,npz,out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi)
-!
+out_ilo = in_ilo
+out_ihi = in_ihi
+out_jlo = in_jlo
+out_jhi = in_jhi
+out_klo = in_klo
+out_khi = in_khi               
 
-
-
-! fft the charge density:
-call fft_perform(crho2,ctmp2,idirection,iperiod,jperiod,kperiod,  &
+! fft the charge density in place
+call fft_perform(crho2,crho2,idirection,iperiod,jperiod,kperiod,  &
      in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
      out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
      ipermute,iscale,time)
 
-
-crho2(:,:,:)=ctmp2(:,:,:)  !now ctmp2 can be reused for next fft
-!
-
-
-
 ! compute the Green function (called cgrn1 below):
 call decompose(myrank,mprocs,& !why does the following line contain rho2 indices?????
 ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl,idecomp,npx,npy,npz,iloo,ihii,jloo,jhii,kloo,khii)
+
 allocate(cgrn1(iloo:ihii,jloo:jhii,kloo:khii))
 !     write(6,*)'igfflag,icomp=',igfflag,icomp
 do k=kloo,khii
@@ -253,28 +262,30 @@ do k=kloo,khii
     enddo
   enddo
 enddo
+           
       
-      
-      
-! fft the Green function:
-call fft_perform(cgrn1,ctmp2,idirection,iperiod,jperiod,kperiod,  &
+! fft the Green function in place:
+call fft_perform(cgrn1,cgrn1,idirection,iperiod,jperiod,kperiod,  &
      in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
      out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
      ipermute,iscale,time)
+
 ! multiply the fft'd charge density and green function:
-cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
-! now do the inverse fft:
+cphi2(:,:,:)=crho2(:,:,:)*cgrn1(:,:,:)
+
+! now do the inverse fft in place
 idirection=-1
-call fft_perform(cphi2,ctmp2,idirection,iperiod,jperiod,kperiod,    &
+call fft_perform(cphi2,cphi2,idirection,iperiod,jperiod,kperiod,    &
      in_ilo,in_ihi,in_jlo,in_jhi,in_klo,in_khi,                   &
      out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
      ipermute,iscale,time)
-cphi2(:,:,:)=ctmp2(:,:,:)/((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod)) !why put ctmp2 in cphi2???  just use cphi2
-!
+
+
 !store the physical portion of the double-size complex array in a non-double-size real array:
 call movetosinglesizec2r(cphi2,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo,ihi,jlo,jhi,klo,khi, &
                          ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz)
-phi(:,:,:)=phi(:,:,:)*econst    !better to divide here by iperiod*jperiod*period
+
+phi(:,:,:)=phi(:,:,:)*econst /((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod))
 
 end subroutine openbcpotential
 !

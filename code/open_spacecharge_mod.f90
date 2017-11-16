@@ -152,7 +152,8 @@ real(dp), parameter :: econst=299792458.d0**2*1.d-7
 call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
 call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
-!
+!determine the lower and upper global indices of the single- and double-size arrays
+!double-size charge density:
 ilo_rho2_gbl=ilo_rho_gbl
 jlo_rho2_gbl=jlo_rho_gbl
 klo_rho2_gbl=jlo_rho_gbl
@@ -160,6 +161,7 @@ ihi_rho2_gbl=ilo_rho2_gbl+2*(ihi_rho_gbl-ilo_rho_gbl+1)-1
 jhi_rho2_gbl=jlo_rho2_gbl+2*(jhi_rho_gbl-jlo_rho_gbl+1)-1
 khi_rho2_gbl=klo_rho2_gbl+2*(khi_rho_gbl-klo_rho_gbl+1)-1
 !
+!single-size potential:
 ilo_phi_gbl=ilo_rho_gbl
 ihi_phi_gbl=ihi_rho_gbl
 jlo_phi_gbl=jlo_rho_gbl
@@ -167,6 +169,7 @@ jhi_phi_gbl=jhi_rho_gbl
 klo_phi_gbl=klo_rho_gbl
 khi_phi_gbl=khi_rho_gbl
 !
+!green function (note: this has negative and positive indices, is in the convolution formula)
 ilo_grn_gbl=ilo_phi_gbl-ihi_rho_gbl
 ihi_grn_gbl=ihi_phi_gbl-ilo_rho_gbl+1 !+1 is padding
 jlo_grn_gbl=jlo_phi_gbl-jhi_rho_gbl
@@ -174,6 +177,7 @@ jhi_grn_gbl=jhi_phi_gbl-jlo_rho_gbl+1 !+1 is padding
 klo_grn_gbl=klo_phi_gbl-khi_rho_gbl
 khi_grn_gbl=khi_phi_gbl-klo_rho_gbl+1 !+1 is padding
 !
+!the period is the size of the doubled array:
 iperiod=ihi_rho2_gbl-ilo_rho2_gbl+1
 jperiod=jhi_rho2_gbl-jlo_rho2_gbl+1
 kperiod=khi_rho2_gbl-klo_rho2_gbl+1
@@ -236,6 +240,10 @@ do k=kloo,khii
    do i=iloo,ihii
      ip=ilo_grn_gbl+mod(i-ilo_grn_gbl+iperiod/2-1,iperiod)
      u=ip*dx
+!igfflag=0 for point-charge green function, =1 to use IGF i.e. to integrate point charge green function over a cell
+!icomp=0 means calculate the potential; icomp=1,2,3 mean calculate Ex,Ey,Ez
+!note: should modify this routine to return all field components simultaneously, not separately
+!note: should provide missing options, e.g. ifflag=0 and icomp= 1 or 2 or 3
      if(igfflag.eq.0.and.icomp.eq.0)gval=coulombfun(u,v,w,gam)
      if(igfflag.eq.1.and.icomp.eq.0)gval=igfcoulombfun(u,v,w,gam,dx,dy,dz)
      if(igfflag.eq.1.and.icomp.eq.1)gval=igfexfun(u,v,w,gam,dx,dy,dz)
@@ -275,6 +283,7 @@ end subroutine openbcpotential
 !------------------------------------------------------------------------
 !+
  function coulombfun(u,v,w,gam) result(res)
+!computes 1/r where r=sqrt(u**2+v**2+(gam*w)**2)
  implicit none
  real(dp) :: res
  real(dp) :: u,v,w,gam
@@ -291,6 +300,7 @@ end subroutine openbcpotential
 !------------------------------------------------------------------------
 !+
 function igfcoulombfun(u,v,w,gam,dx,dy,dz) result(res)
+!computes the definite integral over a cell of 1/r. Cell vertices are combinations of (x1,x2),(y1,y2),(z1,z2)
 implicit none
 real(dp) :: res
 real(dp) :: u,v,w,gam,dx,dy,dz
@@ -315,6 +325,7 @@ end function igfcoulombfun
 !------------------------------------------------------------------------
 !+
 function lafun(x,y,z) result(res)
+!computes the indefinite integral of 1/r
 ! lafun is the function involving log and atan in the PRSTAB paper (I should find a better name for this function)
 implicit none
 real(dp) :: res
@@ -328,6 +339,11 @@ end function lafun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
+!
+!In the following, igfexfun and and xlafun are analogous to igfcoulombfun and lafun,
+!but instead of computing the scalar potential, the quantity computed is Ex.
+!Similary, there are functions further below for the computation of Ey, Ez.
+!
 function igfexfun(u,v,w,gam,dx,dy,dz) result(res)
 implicit none
 real(dp) :: res
@@ -514,6 +530,8 @@ end function zlafun
 
 subroutine movetodoublesizer2c(rho,crho2,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2, &
            ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz)
+!move the single-size real array rho to a double-size complex array crho2 for convolution over a double-size domain
+!rho is stored in the lower left octant. the rest is zero.
 use mpi
 use data_movement_mod, only : lowner,dmrgrnk
 implicit none
@@ -653,6 +671,7 @@ end subroutine
 !+
 subroutine movetosinglesizec2r(crho2,rho,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo,ihi,jlo,jhi,klo,khi, &
                          ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz)
+!move the double-size complex array crho2 back to a single-size real array rho, dropping all but the lower left octant
 use mpi
 use data_movement_mod, only : lowner,dmrgrnk
 implicit none

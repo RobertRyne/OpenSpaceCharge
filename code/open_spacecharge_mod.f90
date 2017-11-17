@@ -152,7 +152,7 @@ end subroutine getfields
 
 
 
-! Test only
+! Test only, uses same interface as openbcpotential
 subroutine Zopenbcpotential(rho,phi,gam, &
     dx,dy,dz, &
      ilo,ihi,jlo,jhi,klo,khi, &
@@ -169,7 +169,7 @@ type(mesh3d_struct) :: mesh3d
 type (domain_decomposition_struct) :: domain
 
 ! Init domain
-call MPI_COMM_SIZE(MPI_COMM_WORLD,domain%max_rank,ierr)
+call MPI_COMM_SIZE(MPI_COMM_WORLD,domain%n_process,ierr)
 call MPI_COMM_RANK(MPI_COMM_WORLD,domain%rank,ierr)
 domain%idecomp = idecomp
 domain%global%lo = [ilo_rho_gbl, jlo_rho_gbl, klo_rho_gbl]
@@ -180,8 +180,8 @@ call init_domain_decomposition(domain, MPI_COMM_WORLD)
 
 mesh3d%delta = [dx, dy, dz]
 mesh3d%gamma = gam
-call allocate_3d(mesh3d%rho, domain%local)
-call allocate_3d(mesh3d%phi, domain%local)
+call allocate_real_3d(mesh3d%rho, domain%local)
+call allocate_real_3d(mesh3d%phi, domain%local)
 mesh3d%rho = rho
 
 if (domain%local%lo(1) /= ilo) print *, 'error'
@@ -222,12 +222,9 @@ gam =  mesh3d%gamma
 domain2 = domain
 domain2%global%hi = domain2%global%lo + 2*domain2%global%n -1
 call init_domain_decomposition(domain2)
-allocate(crho2(domain2%local%lo(1):domain2%local%hi(1), &
-               domain2%local%lo(2):domain2%local%hi(2), &
-               domain2%local%lo(3):domain2%local%hi(3)))
-allocate(cphi2(domain2%local%lo(1):domain2%local%hi(1), &
-               domain2%local%lo(2):domain2%local%hi(2), &
-               domain2%local%lo(3):domain2%local%hi(3)))
+call allocate_complex_3d(crho2, domain2%local)
+call allocate_complex_3d(cphi2, domain2%local)
+
 
 !
 !green function (note: this has negative and positive indices, is in the convolution formula)
@@ -235,9 +232,7 @@ domainGF = domain
 domainGF%global%lo = domain%global%lo - domain%global%hi
 domainGF%global%hi = domain%global%hi - domain%global%lo +1 !+1 is padding
 call init_domain_decomposition(domainGF)
-allocate(cgrn1(domainGF%local%lo(1):domainGF%local%hi(1), &
-               domainGF%local%lo(2):domainGF%local%hi(2), &
-               domainGF%local%lo(3):domainGF%local%hi(3)))
+call allocate_complex_3d(cgrn1, domainGF%local)
 
 
 

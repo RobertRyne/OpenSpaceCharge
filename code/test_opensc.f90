@@ -169,17 +169,17 @@ call decompose(myrank,mprocs,&
 
 ! Test
 domain%rank = myrank
-domain%max_rank = mprocs
+domain%n_process = mprocs
 domain%idecomp = idecomp
 domain%global%lo = [ilo_rho_gbl, jlo_rho_gbl, klo_rho_gbl]
 domain%global%hi = [ihi_rho_gbl, jhi_rho_gbl, khi_rho_gbl]
 
 call init_domain_decomposition(domain, MPI_COMM_WORLD)
-do i=0, mprocs
+do i=0, mprocs-1
   if(myrank.eq.0)print *, '------------------'
   domain%rank = i
   call init_domain_decomposition(domain, MPI_COMM_WORLD)
- ! if(myrank.eq.0)call print_domain_decomposition(domain)
+  if(myrank.eq.0)call print_domain_decomposition(domain)
 end do
 
 ! Allocate the rho and phi and e and h arrays:

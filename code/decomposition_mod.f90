@@ -18,8 +18,8 @@ end type
 
 
 type domain_decomposition_struct
-  integer :: rank                       ! Rank of this subdomain
-  integer :: max_rank                   ! Maximum rank  
+  integer :: rank                       ! Rank of this subdomain. 
+  integer :: n_process                  ! Maximum rank  
   integer :: communicator               ! MPI communicator
   integer :: idecomp                    ! decomposition style 
   type(index_struct) :: process         ! process indices
@@ -30,9 +30,19 @@ end type
 
 contains
 
-subroutine allocate_3d(data, index)
+subroutine allocate_real_3d(data, index)
 type(index_struct) :: index
 real(dp), allocatable :: data(:,:,:)
+
+allocate(data(index%lo(1):index%hi(1), &
+              index%lo(2):index%hi(2), &
+              index%lo(3):index%hi(3)))
+
+end subroutine
+
+subroutine allocate_complex_3d(data, index)
+type(index_struct) :: index
+complex(dp), allocatable :: data(:,:,:)
 
 allocate(data(index%lo(1):index%hi(1), &
               index%lo(2):index%hi(2), &
@@ -49,7 +59,7 @@ end subroutine
 ! Input:
 !   domain    -- domain_decomposition_struct 
 !            %rank
-!            %max_rank
+!            %n_process
 !            %global
 !			 %idecomp, optional
 !          
@@ -66,7 +76,7 @@ if (present(communicator)) domain%communicator = communicator
   
 ! Check if processes have been decomposed
 if (domain%process%n(1) == 0) then
-  call procgriddecomp(domain%max_rank, &
+  call procgriddecomp(domain%n_process, &
                domain%global%lo(1), domain%global%hi(1),  &
                domain%global%lo(2), domain%global%hi(2),  &
                domain%global%lo(3), domain%global%hi(3),  & 
@@ -75,7 +85,7 @@ if (domain%process%n(1) == 0) then
 endif 
 
 ! Set lo, hi indices
-call decompose(domain%rank, domain%max_rank, &
+call decompose(domain%rank, domain%n_process, &
                domain%global%lo(1), domain%global%hi(1),  &
                domain%global%lo(2), domain%global%hi(2),  &
                domain%global%lo(3), domain%global%hi(3),  & 
@@ -98,7 +108,7 @@ subroutine print_domain_decomposition(d)
 type (domain_decomposition_struct) :: d
 
 print *, 'rank: ', d%rank
-print *, 'max_rank: ', d%max_rank
+print *, 'n_process: ', d%n_process
 print *, 'communicator: ', d%communicator
 print *, 'idecomp: ', d%idecomp
 print *, 'process indices: '

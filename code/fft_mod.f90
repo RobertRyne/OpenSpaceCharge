@@ -1,6 +1,46 @@
 module fft_mod
 
+
+use, intrinsic :: iso_fortran_env
+use decomposition_mod
+
+implicit none
+
+integer, parameter, private :: dp = REAL64
+
+
 contains
+
+
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+
+
+subroutine Xfft_perform(complex_data, domain, idirection)
+
+complex(dp),  dimension(:,:,:) :: complex_data
+type (domain_decomposition_struct) :: domain
+real(dp) :: time
+integer :: idirection 
+integer, parameter :: ipermute=0,iscale=0
+
+
+call fft_perform(complex_data,complex_data,idirection, &
+domain%global%n(1), domain%global%n(2), domain%global%n(3), &
+domain%local%lo(1), domain%local%hi(1), &
+domain%local%lo(2), domain%local%hi(2), &
+domain%local%lo(3), domain%local%hi(3), &
+domain%local%lo(1), domain%local%hi(1), &
+domain%local%lo(2), domain%local%hi(2), &
+domain%local%lo(3), domain%local%hi(3), &
+ipermute,iscale,time )
+
+
+end subroutine
+
 
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
@@ -14,10 +54,9 @@ subroutine fft_perform(data_in,data_out,idirection,nx,ny,nz,      &
      ipermute,iscale,time)
 
 USE mpi !include "mpif.h"
-use, intrinsic :: iso_fortran_env
+
 implicit none
 
-integer, parameter :: dp = REAL64
 !     COMPLEX_DATA data_in(*)
 complex(dp) data_in(*)
 complex(dp) data_out(*)
@@ -132,10 +171,8 @@ subroutine xpose_perform(data,buf,iteration,                      &
      nqty,ipermute,memory,time)
 
 USE mpi !include "mpif.h"
-use, intrinsic :: iso_fortran_env
 implicit none
 
-integer, parameter :: dp = REAL64
 !     REAL_DATA data(*),buf(*)
 real(dp) data(*),buf(*)
 real(dp) time,time1,time2

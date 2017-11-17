@@ -11,6 +11,8 @@ implicit none
 ! Fortran 2008
 integer, parameter  :: dp = REAL64
 
+
+type (domain_decomposition_struct) :: domain
 ! This code has no input file. Most of the problem parameters are set here:
 !integer, parameter :: nx_gbl=1024, ny_gbl=1024, nz_gbl=1024 ! global # of grid points
 integer :: nx_gbl, ny_gbl, nz_gbl ! global # of grid points
@@ -164,6 +166,22 @@ endif
 call decompose(myrank,mprocs,&
      ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,ilo,ihi,jlo,jhi,klo,khi)
 !
+
+! Test
+domain%rank = myrank
+domain%max_rank = mprocs
+domain%idecomp = idecomp
+domain%global%lo = [ilo_rho_gbl, jlo_rho_gbl, klo_rho_gbl]
+domain%global%hi = [ihi_rho_gbl, jhi_rho_gbl, khi_rho_gbl]
+
+call init_domain_decomposition(domain, MPI_COMM_WORLD)
+do i=0, mprocs
+  if(myrank.eq.0)print *, '------------------'
+  domain%rank = i
+  call init_domain_decomposition(domain, MPI_COMM_WORLD)
+ ! if(myrank.eq.0)call print_domain_decomposition(domain)
+end do
+
 ! Allocate the rho and phi and e and h arrays:
 allocate(rho(ilo:ihi,jlo:jhi,klo:khi))
 allocate(phi(ilo:ihi,jlo:jhi,klo:khi))

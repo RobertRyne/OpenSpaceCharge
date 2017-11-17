@@ -1,8 +1,9 @@
 module open_spacecharge_mod
 
 use, intrinsic :: iso_fortran_env
-use fft_mod
 
+use fft_mod
+use decomposition_mod
 
 implicit none
 
@@ -10,6 +11,9 @@ implicit none
 integer, parameter, private :: sp = REAL32
 integer, parameter, private :: dp = REAL64
 integer, parameter, private :: qp = REAL128
+
+
+
 
 
 type field_struct
@@ -30,6 +34,14 @@ end type
 
 
 contains
+
+subroutine init_mesh3d(mesh3d, domain) 
+type(mesh3d_struct) :: mesh3d
+type (domain_decomposition_struct) :: domain
+
+
+
+end subroutine
 
 
 !------------------------------------------------------------------------
@@ -83,9 +95,12 @@ if(idirectfieldcalc.eq.1)then
   if(myrank.eq.0)write(6,*)'computing Ex,Ey,Ez with OpenBC'
 
   icomp=1 
-  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+  !if(myrank.eq.0)print *,'old'
+  !call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+  !ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+  !if(myrank.eq.0)print *,'new'
+  call Zopenbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
   ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
-
   do k=klo,khi
     do j=jlo,jhi
       do i=ilo,ihi
@@ -133,6 +148,177 @@ end subroutine getfields
 
 
 
+
+
+
+
+! Test only
+subroutine Zopenbcpotential(rho,phi,gam, &
+    dx,dy,dz, &
+     ilo,ihi,jlo,jhi,klo,khi, &
+       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl, &
+       idecomp,npx,npy,npz,icomp,igfflag,ierr)
+ use mpi      
+implicit none       
+real(dp) :: gam,dx,dy,dz
+integer :: ilo,ihi,jlo,jhi,klo,khi
+integer :: ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr
+real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho,phi
+
+type(mesh3d_struct) :: mesh3d
+type (domain_decomposition_struct) :: domain
+
+! Init domain
+call MPI_COMM_SIZE(MPI_COMM_WORLD,domain%max_rank,ierr)
+call MPI_COMM_RANK(MPI_COMM_WORLD,domain%rank,ierr)
+domain%idecomp = idecomp
+domain%global%lo = [ilo_rho_gbl, jlo_rho_gbl, klo_rho_gbl]
+domain%global%hi = [ihi_rho_gbl, jhi_rho_gbl, khi_rho_gbl]
+call init_domain_decomposition(domain, MPI_COMM_WORLD)
+
+! Init mesh
+
+mesh3d%delta = [dx, dy, dz]
+mesh3d%gamma = gam
+call allocate_3d(mesh3d%rho, domain%local)
+call allocate_3d(mesh3d%phi, domain%local)
+mesh3d%rho = rho
+
+if (domain%local%lo(1) /= ilo) print *, 'error'
+
+call Xopenbcpotential(mesh3d, domain, icomp, igfflag, ierr)
+
+phi = mesh3d%phi
+
+end subroutine
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+subroutine  Xopenbcpotential(mesh3d, domain, icomp, igfflag, ierr)
+
+implicit none
+
+type(mesh3d_struct) :: mesh3d
+type (domain_decomposition_struct) :: domain, domain2, domainGF
+real(dp) :: gam,dx,dy,dz
+integer :: icomp,igfflag,ierr
+complex(dp), allocatable, dimension(:,:,:) :: crho2,cphi2,cgrn1 !what is the "1" for in cgrn1?
+real(dp) :: u,v,w,gval, time
+integer :: idirection
+integer :: i,j,k,ip,jp,kp, myrank
+
+
+real(dp), parameter :: econst=299792458.d0**2*1.d-7
+!
+dx = mesh3d%delta(1)
+dy = mesh3d%delta(2)
+dz = mesh3d%delta(3)
+gam =  mesh3d%gamma
+
+!determine the lower and upper global indices of the single- and double-size arrays
+!double-size charge density:
+domain2 = domain
+domain2%global%hi = domain2%global%lo + 2*domain2%global%n -1
+call init_domain_decomposition(domain2)
+allocate(crho2(domain2%local%lo(1):domain2%local%hi(1), &
+               domain2%local%lo(2):domain2%local%hi(2), &
+               domain2%local%lo(3):domain2%local%hi(3)))
+allocate(cphi2(domain2%local%lo(1):domain2%local%hi(1), &
+               domain2%local%lo(2):domain2%local%hi(2), &
+               domain2%local%lo(3):domain2%local%hi(3)))
+
+!
+!green function (note: this has negative and positive indices, is in the convolution formula)
+domainGF = domain
+domainGF%global%lo = domain%global%lo - domain%global%hi
+domainGF%global%hi = domain%global%hi - domain%global%lo +1 !+1 is padding
+call init_domain_decomposition(domainGF)
+allocate(cgrn1(domainGF%local%lo(1):domainGF%local%hi(1), &
+               domainGF%local%lo(2):domainGF%local%hi(2), &
+               domainGF%local%lo(3):domainGF%local%hi(3)))
+
+
+
+!store rho in a double-size complex array:
+call movetodoublesizer2c(mesh3d%rho,crho2, &
+domain%local%lo(1), domain%local%hi(1), &
+domain%local%lo(2), domain%local%hi(2), &
+domain%local%lo(3), domain%local%hi(3), &
+domain2%local%lo(1), domain2%local%hi(1), &
+domain2%local%lo(2), domain2%local%hi(2), &
+domain2%local%lo(3), domain2%local%hi(3), &
+domain2%global%lo(1), domain2%global%hi(1), &
+domain2%global%lo(2), domain2%global%hi(2), &
+domain2%global%lo(3), domain2%global%hi(3), &
+domain2%idecomp, &
+domain2%process%n(1), domain2%process%n(2), domain2%process%n(3))
+
+    
+! fft the charge density in place
+idirection=1 
+call Xfft_perform(crho2, domain2, idirection)
+
+
+
+!     write(6,*)'igfflag,icomp=',igfflag,icomp
+do k=domainGF%local%lo(3), domainGF%local%hi(3)
+  kp=domainGF%global%lo(3)+mod(k-domainGF%global%lo(3)+domain2%global%n(3)/2-1,domain2%global%n(3) )
+  w=kp*dz
+  do j=domainGF%local%lo(2), domainGF%local%hi(2)
+    jp=domainGF%global%lo(2)+mod(j-domainGF%global%lo(2)+domain2%global%n(2) /2-1,domain2%global%n(2) )
+    v=jp*dy
+   do i=domainGF%local%lo(1), domainGF%local%hi(1)
+     ip=domainGF%global%lo(1)+mod(i-domainGF%global%lo(1)+domain2%global%n(1)/2-1,domain2%global%n(1) )
+     u=ip*dx
+!igfflag=0 for point-charge green function, =1 to use IGF i.e. to integrate point charge green function over a cell
+!icomp=0 means calculate the potential; icomp=1,2,3 mean calculate Ex,Ey,Ez
+!note: should modify this routine to return all field components simultaneously, not separately
+!note: should provide missing options, e.g. ifflag=0 and icomp= 1 or 2 or 3
+     if(igfflag.eq.0.and.icomp.eq.0)gval=coulombfun(u,v,w,gam)
+     if(igfflag.eq.1.and.icomp.eq.0)gval=igfcoulombfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.1)gval=igfexfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.2)gval=igfeyfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.3)gval=igfezfun(u,v,w,gam,dx,dy,dz)
+     cgrn1(i,j,k)=cmplx(gval,0.d0)
+    enddo
+  enddo
+enddo
+
+! fft the Green function in place:
+idirection=1
+call Xfft_perform(cgrn1, domain2, idirection)
+
+! multiply the fft'd charge density and green function:
+cphi2(:,:,:)=crho2(:,:,:)*cgrn1(:,:,:)
+
+! now do the inverse fft in place
+idirection=-1
+call Xfft_perform(cphi2, domain2, idirection)
+
+!store the physical portion of the double-size complex array in a non-double-size real array:
+call movetosinglesizec2r(cphi2, mesh3d%phi, &
+domain2%local%lo(1), domain2%local%hi(1), &
+domain2%local%lo(2), domain2%local%hi(2), &
+domain2%local%lo(3), domain2%local%hi(3), &
+domain%local%lo(1), domain%local%hi(1), &
+domain%local%lo(2), domain%local%hi(2), &
+domain%local%lo(3), domain%local%hi(3), &
+domain%global%lo(1), domain%global%hi(1), &
+domain%global%lo(2), domain%global%hi(2), &
+domain%global%lo(3), domain%global%hi(3), &
+domain2%idecomp, &
+domain2%process%n(1), domain2%process%n(2), domain2%process%n(3))
+
+! Why divide by double-sized n? -Chris
+mesh3d%phi=mesh3d%phi*econst / &
+  ((1.d0*domain2%global%n(1))*(1.d0*domain2%global%n(2))*(1.d0*domain2%global%n(3)))
+
+end subroutine Xopenbcpotential
+
+
+
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
@@ -164,7 +350,6 @@ real(dp) :: u,v,w,gval
 integer :: mprocs,myrank
 real(dp), parameter :: econst=299792458.d0**2*1.d-7
 !
-
 
 call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
 call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
@@ -211,6 +396,7 @@ allocate(cphi2(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
 !store rho in a double-size complex array:
 call movetodoublesizer2c(rho,crho2,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2, &
                          ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl,idecomp,npx,npy,npz)
+
 !
 !!prepare for fft:
 idecomp_in=idecomp
@@ -261,8 +447,7 @@ do k=kloo,khii
      cgrn1(i,j,k)=cmplx(gval,0.d0)
     enddo
   enddo
-enddo
-           
+enddo           
       
 ! fft the Green function in place:
 call fft_perform(cgrn1,cgrn1,idirection,iperiod,jperiod,kperiod,  &
@@ -272,6 +457,7 @@ call fft_perform(cgrn1,cgrn1,idirection,iperiod,jperiod,kperiod,  &
 
 ! multiply the fft'd charge density and green function:
 cphi2(:,:,:)=crho2(:,:,:)*cgrn1(:,:,:)
+
 
 ! now do the inverse fft in place
 idirection=-1

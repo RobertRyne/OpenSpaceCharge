@@ -9,7 +9,113 @@ integer, parameter, private :: sp = REAL32
 integer, parameter, private :: dp = REAL64
 integer, parameter, private :: qp = REAL128
 
+
+type index_struct
+ integer :: n(3)  = 0   ! number of points in each direction x, y, z
+ integer :: lo(3) = 0   ! Low index
+ integer :: hi(3) = 0   ! high index = n + low - 1
+end type
+
+
+type domain_decomposition_struct
+  integer :: rank                       ! Rank of this subdomain
+  integer :: max_rank                   ! Maximum rank  
+  integer :: communicator               ! MPI communicator
+  integer :: idecomp                    ! decomposition style 
+  type(index_struct) :: process         ! process indices
+  type(index_struct) :: global          ! global grid indices
+  type(index_struct) :: local           ! local grid indices
+end type
+
+
 contains
+
+subroutine allocate_3d(data, index)
+type(index_struct) :: index
+real(dp), allocatable :: data(:,:,:)
+
+allocate(data(index%lo(1):index%hi(1), &
+              index%lo(2):index%hi(2), &
+              index%lo(3):index%hi(3)))
+
+end subroutine
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+   
+!
+!
+! Input:
+!   domain    -- domain_decomposition_struct 
+!            %rank
+!            %max_rank
+!            %global
+!			 %idecomp, optional
+!          
+! Output:
+!   domain    -- domain_decomposition_struct 
+!                %process (if not previously set)
+!                %local
+
+subroutine init_domain_decomposition(domain,  communicator)
+type (domain_decomposition_struct) :: domain
+integer, optional :: communicator 
+
+if (present(communicator)) domain%communicator = communicator
+  
+! Check if processes have been decomposed
+if (domain%process%n(1) == 0) then
+  call procgriddecomp(domain%max_rank, &
+               domain%global%lo(1), domain%global%hi(1),  &
+               domain%global%lo(2), domain%global%hi(2),  &
+               domain%global%lo(3), domain%global%hi(3),  & 
+               domain%idecomp, &
+               domain%process%n(1), domain%process%n(2), domain%process%n(3))
+endif 
+
+! Set lo, hi indices
+call decompose(domain%rank, domain%max_rank, &
+               domain%global%lo(1), domain%global%hi(1),  &
+               domain%global%lo(2), domain%global%hi(2),  &
+               domain%global%lo(3), domain%global%hi(3),  & 
+               domain%idecomp, &
+               domain%process%n(1), domain%process%n(2), domain%process%n(3), &
+               domain%local%lo(1), domain%local%hi(1), &
+               domain%local%lo(2), domain%local%hi(2), &
+               domain%local%lo(3), domain%local%hi(3) )
+
+! Set for consistency:
+domain%process%lo = 1
+domain%process%hi = domain%process%n 
+domain%local%n = domain%local%hi - domain%local%lo +1
+domain%global%n = domain%global%hi - domain%global%lo +1
+
+end subroutine
+
+
+subroutine print_domain_decomposition(d)
+type (domain_decomposition_struct) :: d
+
+print *, 'rank: ', d%rank
+print *, 'max_rank: ', d%max_rank
+print *, 'communicator: ', d%communicator
+print *, 'idecomp: ', d%idecomp
+print *, 'process indices: '
+call print_index(d%process)
+print *, 'global indices: '
+call print_index(d%global)
+print *, 'local indices: '
+call print_index(d%local)
+
+end subroutine
+
+subroutine print_index(ix)
+type(index_struct) :: ix
+print *, '  n: ', ix%n
+print *, '  lo: ', ix%lo
+print *, '  hi: ', ix%hi
+end subroutine
 
 ! -----------------------------------------------------------------------
 ! partition array for all possibilities

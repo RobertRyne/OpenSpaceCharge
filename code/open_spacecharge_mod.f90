@@ -77,14 +77,14 @@ if(idirectfieldcalc.eq.0)then
   icomp=0
   call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
          ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
- 
-  do k=klo,khi-1 !fixed; was 1,nz in serial code
-    do j=jlo,jhi-1 !fixed
-      do i=ilo,ihi-1 !fixed. and fixed in loops below too
+!the following needs work due to incorrect location of the 1-sided diff and due to missing boundary value; fix later
+  do k=klo,khi-1
+    do j=jlo,jhi-1
+      do i=ilo,ihi-1
         if(icomp.eq.0)then
-          ex(i,j,k)=-(phi(i+1,j,k)-phi(i,j,k))/dx*gam0  !if desired, edit for centered difference and increment starting do index
-          ey(i,j,k)=-(phi(i,j+1,k)-phi(i,j,k))/dy*gam0  !ditto
-          ez(i,j,k)=-(phi(i,j,k+1)-phi(i,j,k))/dz/gam0  !ditto
+          ex(i,j,k)=-(phi(i+1,j,k)-phi(i,j,k))/dx              !if desired, edit for centered diff and incr starting do index
+          ey(i,j,k)=-(phi(i,j+1,k)-phi(i,j,k))/dy
+          ez(i,j,k)=-(phi(i,j,k+1)-phi(i,j,k))/dz/gamma_ave**2 !Ez=-d/dz(phi(beta-ct) - beta/c d/dt(phi(beta-ct)) 
         endif
     enddo
   enddo
@@ -483,8 +483,7 @@ end subroutine openbcpotential
    res=0.d0
    return
  endif
- res=1.d0/sqrt(u**2+v**2+(gam*w)**2)  !coulomb
-!     res=u/(u**2+v**2+(gam*w)**2)**1.5d0  !x-electric field
+ res=gam/sqrt(u**2+v**2+(gam*w)**2)  !coulomb
  return
  end function coulombfun
 !------------------------------------------------------------------------
@@ -509,7 +508,7 @@ z2=(w+0.5d0*dz)*gam
 !     res=u/(u**2+v**2+w**2)**1.5d0  !x-electric field
 res=lafun(x2,y2,z2)-lafun(x1,y2,z2)-lafun(x2,y1,z2)-lafun(x2,y2,z1)-lafun(x1,y1,z1)+ &
     lafun(x1,y1,z2)+lafun(x1,y2,z1)+lafun(x2,y1,z1)
-res=res/(dx*dy*dz*gam)
+res=res/(dx*dy*dz)
 
 end function igfcoulombfun
 !------------------------------------------------------------------------

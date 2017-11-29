@@ -84,7 +84,7 @@ if(idirectfieldcalc.eq.0)then
         if(icomp.eq.0)then
           ex(i,j,k)=-(phi(i+1,j,k)-phi(i,j,k))/dx              !if desired, edit for centered diff and incr starting do index
           ey(i,j,k)=-(phi(i,j+1,k)-phi(i,j,k))/dy
-          ez(i,j,k)=-(phi(i,j,k+1)-phi(i,j,k))/dz/gamma_ave**2 !Ez=-d/dz(phi(beta-ct) - beta/c d/dt(phi(beta-ct)) 
+          ez(i,j,k)=-(phi(i,j,k+1)-phi(i,j,k))/dz/gam0**2 !Ez=-d/dz(phi(beta-ct) - beta/c d/dt(phi(beta-ct)) 
         endif
     enddo
   enddo

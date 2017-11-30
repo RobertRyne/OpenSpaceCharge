@@ -29,7 +29,7 @@ enable_language(C)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wuninitialized -pedantic -Wextra")
 
 
-set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Debug)
 
 #find_package(OpenMP)
 #if (OPENMP_FOUND)

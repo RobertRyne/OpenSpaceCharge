@@ -38,7 +38,7 @@ void fft_3d_interface(FFT_DATA *in, FFT_DATA *out,
 /* F77 wrapper on fft_create_plan */
 
 void fft_3d_create_plan_interface(
-       MPI_Comm *comm, int *nfast, int *nmid, int *nslow,
+       int *fcomm, int *nfast, int *nmid, int *nslow,
        int *in_ilo, int *in_ihi, int *in_jlo, int *in_jhi,
        int *in_klo, int *in_khi,
        int *out_ilo, int *out_ihi, int *out_jlo, int *out_jhi,
@@ -48,18 +48,19 @@ void fft_3d_create_plan_interface(
 
 {
   int me;
-/* cryneJ    printf("comm = %x %d \n", *comm, *comm); */
-
+/* cryneJ    printf("comm = %x %d \n", *comm, *comm); */\
+printf("fcomm = %x %d \n", *fcomm, *fcomm);
+MPI_Comm comm = MPI_Comm_f2c(*fcomm); 
 /* convert F77 indices into C */
 
-  *plan = fft_3d_create_plan(*comm,*nfast,*nmid,*nslow,
+  *plan = fft_3d_create_plan(comm,*nfast,*nmid,*nslow,
 			     *in_ilo-1,*in_ihi-1,*in_jlo-1,*in_jhi-1,
 			     *in_klo-1,*in_khi-1,
 			     *out_ilo-1,*out_ihi-1,*out_jlo-1,*out_jhi-1,
 			     *out_klo-1,*out_khi-1,
 			     *scaled, *permute, nbuf);
   if (*plan == NULL) {
-    MPI_Comm_rank(*comm,&me);
+    MPI_Comm_rank(comm,&me);
     printf("ERROR: FFT 3d plan is NULL on proc %d\n",me);
   }
 }

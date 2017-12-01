@@ -49,8 +49,7 @@ void fft_3d_create_plan_interface(
 {
   int me;
 /* cryneJ    printf("comm = %x %d \n", *comm, *comm); */\
-printf("fcomm = %x %d \n", *fcomm, *fcomm);
-MPI_Comm comm = MPI_Comm_f2c(*fcomm); 
+MPI_Comm comm = MPI_Comm_f2c(*fcomm); // Convert Fortran handle to C
 /* convert F77 indices into C */
 
   *plan = fft_3d_create_plan(comm,*nfast,*nmid,*nslow,

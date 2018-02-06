@@ -1,7 +1,11 @@
 module open_spacecharge_mod
 
 use, intrinsic :: iso_fortran_env
-use fft_interface_mod
+!uncomment the following for the version that uses the 1D FFT from Alan Miller's web page
+!and compile with: gfortran test_mod.f90 fast_fourier_am.f90 open_spacecharge_mod.f90 test_opensc.f90
+use fast_fourier_am
+!uncomment the following for the version that uses FFTW:
+!nofftw use fft_interface_mod
 !$ use omp_lib
 
 implicit none
@@ -461,8 +465,8 @@ crho2(ilo:ihi,jlo:jhi,klo:khi)=rho(ilo:ihi,jlo:jhi,klo:khi)
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
 !-!#else
-!call ccfft3d(crho2,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
-call fftw_ccfft3d(crho2,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
+call ccfft3d(crho2,ctmp2,(/1,1,1/),iperiod,jperiod,kperiod,0)
+!nofftw call fftw_ccfft3d(crho2,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
 !-!#endif
 crho2(:,:,:)=ctmp2(:,:,:)  !now ctmp2 can be reused for next fft
 !
@@ -513,8 +517,8 @@ enddo
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
 !-!# else
-!call ccfft3d(cgrn1,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
-call fftw_ccfft3d(cgrn1,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
+call ccfft3d(cgrn1,ctmp2,(/1,1,1/),iperiod,jperiod,kperiod,0)
+!nofftw call fftw_ccfft3d(cgrn1,ctmp2,[1,1,1],iperiod,jperiod,kperiod,0)
 !-!#endif
 ! multiply the fft'd charge density and green function:
 cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
@@ -526,8 +530,8 @@ cphi2(:,:,:)=crho2(:,:,:)*ctmp2(:,:,:)
 !    &     out_ilo,out_ihi,out_jlo,out_jhi,out_klo,out_khi,             &
 !    &     ipermute,iscale,time)
 !-!#else
-!call ccfft3d(cphi2,ctmp2,[-1,-1,-1],iperiod,jperiod,kperiod,0)
-call fftw_ccfft3d(cphi2,ctmp2,[-1,-1,-1],iperiod,jperiod,kperiod,0)
+call ccfft3d(cphi2,ctmp2,(/-1,-1,-1/),iperiod,jperiod,kperiod,0)
+!nofftw call fftw_ccfft3d(cphi2,ctmp2,[-1,-1,-1],iperiod,jperiod,kperiod,0)
 !-!#endif
 cphi2(:,:,:)=ctmp2(:,:,:)/((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod))
 !
@@ -967,9 +971,10 @@ subroutine mccfft1d(a,ntot,lenfft,idir)
 implicit none
 complex(dp), dimension(*) :: a
 integer :: ntot,lenfft,idir
-integer :: n
+integer :: n,ierr
 do n=1,ntot*lenfft,lenfft
- call ccfftnr(a(n),lenfft,idir)
+ call ccfftam(a(n),lenfft,idir,ierr)  ! Alan Miller version
+ ! call ccfftnr(a(n),lenfft,idir)
  ! call gsl_fft(a(n),lenfft,idir)  
 enddo
 return

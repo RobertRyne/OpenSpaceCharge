@@ -138,6 +138,14 @@ integer, intent(in) :: ilo,ihi,jlo,jhi,klo,khi,ilo_rho_gbl,ihi_rho_gbl,jlo_rho_g
 real(dp), intent(in) :: gam0,dx,dy,dz
 real(dp), intent(in), dimension(:,:,:) :: rho
 real(dp), intent(out), dimension(:,:,:) :: phi,bx,by,bz,ex,ey,ez
+
+complex(dp), allocatable, dimension(:,:,:) :: crhotilde,cgrntilde
+integer :: ilo_rho2_gbl,ihi_rho2_gbl,jlo_rho2_gbl,jhi_rho2_gbl,klo_rho2_gbl,khi_rho2_gbl
+integer :: ilo_phi_gbl,ihi_phi_gbl,jlo_phi_gbl,jhi_phi_gbl,klo_phi_gbl,khi_phi_gbl
+integer :: ilo_grn_gbl,ihi_grn_gbl,jlo_grn_gbl,jhi_grn_gbl,klo_grn_gbl,khi_grn_gbl
+integer :: ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn
+integer :: ilo2,ihi2,jlo2,jhi2,klo2,khi2,iperiod,jperiod,kperiod
+
 integer :: icomp
 real(dp), parameter :: clight=299792458.d0
 !real(dp), parameter :: mu0=8.d0*asin(1.d0)*1.d-7
@@ -148,23 +156,68 @@ integer :: mprocs,myrank,ierr
 !call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
 !call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 
-
-gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
-
+!--------------------------
+!indices of various arrays:
+!note: This is is a huge mess but it's here so that the serial code can be parallelized more easily.
+!      It could be hidden in a struct eventually but it shouldn't be done now since the code is still evolving.
+!      I'm not sure it's worth it anyway since these are deep in the code and don't affect the API.
+ilo_rho2_gbl=ilo_rho_gbl; jlo_rho2_gbl=jlo_rho_gbl; klo_rho2_gbl=jlo_rho_gbl
+ihi_rho2_gbl=ilo_rho2_gbl+2*(ihi_rho_gbl-ilo_rho_gbl+1)-1
+jhi_rho2_gbl=jlo_rho2_gbl+2*(jhi_rho_gbl-jlo_rho_gbl+1)-1
+khi_rho2_gbl=klo_rho2_gbl+2*(khi_rho_gbl-klo_rho_gbl+1)-1
+ilo2=ilo_rho2_gbl;ihi2=ihi_rho2_gbl; jlo2=jlo_rho2_gbl;jhi2=jhi_rho2_gbl; klo2=klo_rho2_gbl;khi2=khi_rho2_gbl
+iperiod=ihi_rho2_gbl-ilo_rho2_gbl+1; jperiod=jhi_rho2_gbl-jlo_rho2_gbl+1; kperiod=khi_rho2_gbl-klo_rho2_gbl+1
+ilo_phi_gbl=ilo_rho_gbl; ihi_phi_gbl=ihi_rho_gbl !phi and rho have the same global indices
+jlo_phi_gbl=jlo_rho_gbl; jhi_phi_gbl=jhi_rho_gbl
+klo_phi_gbl=klo_rho_gbl; khi_phi_gbl=khi_rho_gbl
+ilo_grn_gbl=ilo_phi_gbl-ihi_rho_gbl
+ihi_grn_gbl=ihi_phi_gbl-ilo_rho_gbl+1 !+1 is padding
+jlo_grn_gbl=jlo_phi_gbl-jhi_rho_gbl
+jhi_grn_gbl=jhi_phi_gbl-jlo_rho_gbl+1 !+1 is padding
+klo_grn_gbl=klo_phi_gbl-khi_rho_gbl
+khi_grn_gbl=khi_phi_gbl-klo_rho_gbl+1 !+1 is padding
+ilo_grn=ilo_grn_gbl; ihi_grn=ihi_grn_gbl; jlo_grn=jlo_grn_gbl; jhi_grn=jhi_grn_gbl; klo_grn=klo_grn_gbl; khi_grn=khi_grn_gbl
+!--------------------------
+!I have reorganized the code so that the functionality of openbcpotential is now in 3 separate routines.
+!This was done to make be able to reuse certain arrays. Also to separate funtionality that need not be intertwined.
+!The reorganized code replaces:
+!      call openbcpotential()
+! with
+!      if(.not.allocated(crhotilde))allocate(crhotilde....
+!      call getrhotilde()
+!      if(.not.allocated(cgrntilde))allocate(cgrntilde...
+!      call getgrntilde()
+!      call conv3d()
+!--------------------------
 
 if(idirectfieldcalc.eq.0)then
   if(myrank.eq.0)write(6,*)'computing phi with OpenBC'
   icomp=0
-        call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+
+!compute/store the FFT of the charge density:
+if(.not.allocated(crhotilde))allocate(crhotilde(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
+call getrhotilde(rho,crhotilde,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,iperiod,jperiod,kperiod)
+!compute/store the FFT of the green function:
+if(.not.allocated(cgrntilde))allocate(cgrntilde(ilo_grn:ihi_grn,jlo_grn:jhi_grn,klo_grn:khi_grn))
+call getgrntilde(cgrntilde,dx,dy,dz,gam0,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,ilo_grn_gbl,jlo_grn_gbl,klo_grn_gbl,&
+                 iperiod,jperiod,kperiod,igfflag,icomp)
+!compute the convolution:   (note that crhotilde,cgrntilde are complex padded, phi is real not padded)
+call conv3d(crhotilde,cgrntilde,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,&
+            ilo,ihi,jlo,jhi,klo,khi,iperiod,jperiod,kperiod)
+
+!old    call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+!old &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
   if(myrank.eq.0)write(6,*)'...done'
-  do k=1,nz
-    do j=1,ny
-      do i=1,nx
+
+!original version did not handle the edge values correctly when differencing; for now zero the edges
+ex(1:nx,1:ny,1:nz)=0.d0; ey(1:nx,1:ny,1:nz)=0.d0; ez(1:nx,1:ny,1:nz)=0.d0
+  do k=2,nz-1      !1,nz
+    do j=2,ny-1    !1,ny
+      do i=2,nx-1  !1,nx
         if(icomp.eq.0)then
-          ex(i,j,k)=-(phi(i+1,j,k)-phi(i,j,k))/dx*gam0
-          ey(i,j,k)=-(phi(i,j+1,k)-phi(i,j,k))/dy*gam0
-          ez(i,j,k)=-(phi(i,j,k+1)-phi(i,j,k))/dz/gam0
+          ex(i,j,k)=-(phi(i+1,j,k)-phi(i-1,j,k))/(2.d0*dx)*gam0   !fixed. original had 1-sided difference
+          ey(i,j,k)=-(phi(i,j+1,k)-phi(i,j-1,k))/(2.d0*dy)*gam0   !fixed. original had 1-sided difference
+          ez(i,j,k)=-(phi(i,j,k+1)-phi(i,j,k-1))/(2.d0*dz)/gam0   !fixed. original had 1-sided difference
         endif
       enddo
     enddo
@@ -174,8 +227,15 @@ endif
 if(idirectfieldcalc.eq.1)then
   if(myrank.eq.0)write(6,*)'computing Ex,Ey,Ez with OpenBC'
   icomp=1
-  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+if(.not.allocated(crhotilde))allocate(crhotilde(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
+call getrhotilde(rho,crhotilde,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,iperiod,jperiod,kperiod)
+if(.not.allocated(cgrntilde))allocate(cgrntilde(ilo_grn:ihi_grn,jlo_grn:jhi_grn,klo_grn:khi_grn))
+call getgrntilde(cgrntilde,dx,dy,dz,gam0,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,ilo_grn_gbl,jlo_grn_gbl,klo_grn_gbl,&
+                 iperiod,jperiod,kperiod,igfflag,icomp)
+call conv3d(crhotilde,cgrntilde,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,&
+            ilo,ihi,jlo,jhi,klo,khi,iperiod,jperiod,kperiod)
+!old  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+!old     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
   if(myrank.eq.0)print *, 'Ex test: ', phi(nx/2,ny/2,nz/2)
   do k=1,nz
     do j=1,ny
@@ -185,8 +245,12 @@ if(idirectfieldcalc.eq.1)then
     enddo
   enddo
   icomp=2
-  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+call getgrntilde(cgrntilde,dx,dy,dz,gam0,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,ilo_grn_gbl,jlo_grn_gbl,klo_grn_gbl,&
+                 iperiod,jperiod,kperiod,igfflag,icomp)
+call conv3d(crhotilde,cgrntilde,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,&
+            ilo,ihi,jlo,jhi,klo,khi,iperiod,jperiod,kperiod)
+!old  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+!old     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
   if(myrank.eq.0)print *, 'Ey test: ', phi(nx/2,ny/2,nz/2)
   do k=1,nz
     do j=1,ny
@@ -196,8 +260,12 @@ if(idirectfieldcalc.eq.1)then
     enddo
   enddo
   icomp=3
-  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
-     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
+call getgrntilde(cgrntilde,dx,dy,dz,gam0,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,ilo_grn_gbl,jlo_grn_gbl,klo_grn_gbl,&
+                 iperiod,jperiod,kperiod,igfflag,icomp)
+call conv3d(crhotilde,cgrntilde,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,&
+            ilo,ihi,jlo,jhi,klo,khi,iperiod,jperiod,kperiod)
+!old  call openbcpotential(rho,phi,gam0,dx,dy,dz,ilo,ihi,jlo,jhi,klo,khi, &
+!old     &       ilo_rho_gbl,ihi_rho_gbl,jlo_rho_gbl,jhi_rho_gbl,klo_rho_gbl,khi_rho_gbl,idecomp,npx,npy,npz,icomp,igfflag,ierr)
   
   if(myrank.eq.0)print *, 'Ez test: ', phi(nx/2,ny/2,nz/2)
   do k=1,nz
@@ -211,6 +279,7 @@ endif
 
 
 ! set the magnetic field:
+gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
 do k=1,nz
   do j=1,ny
     do i=1,nx
@@ -1050,6 +1119,80 @@ enddo
 
 end subroutine
 
+subroutine getrhotilde(rho,crho,ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,iperiod,jperiod,kperiod)
+implicit none
+integer :: ilo,ihi,jlo,jhi,klo,khi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,iperiod,jperiod,kperiod
+real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: rho
+complex(dp), dimension(ilo2:ihi2,jlo2:jhi2,klo2:khi2) :: crho
+complex(dp), dimension(ilo2:ihi2,jlo2:jhi2,klo2:khi2) :: ctmp
+crho(:,:,:)=0.d0
+crho(ilo:ihi,jlo:jhi,klo:khi)=rho(ilo:ihi,jlo:jhi,klo:khi)
+!fft the charge density:
+call ccfft3d(crho,ctmp,(/1,1,1/),iperiod,jperiod,kperiod,0) !can I do the fft in place? problematic in parallel code
+crho(:,:,:)=ctmp(:,:,:)  !now ctmp2 can be reused for next fft
+return
+end subroutine
 
+subroutine getgrntilde(cgrn,dx,dy,dz,gam,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,ilo_grn_gbl,jlo_grn_gbl,klo_grn_gbl, &
+                       iperiod,jperiod,kperiod,igfflag,icomp)
+implicit none
+real(dp) :: dx,dy,dz,gam
+integer :: ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,ilo_grn_gbl,jlo_grn_gbl,klo_grn_gbl
+integer :: iperiod,jperiod,kperiod,igfflag,icomp
+complex(dp), dimension(ilo_grn:ihi_grn,jlo_grn:jhi_grn,klo_grn:khi_grn) :: cgrn
+complex(dp), dimension(ilo_grn:ihi_grn,jlo_grn:jhi_grn,klo_grn:khi_grn) :: ctmp
+complex(dp), dimension(1:iperiod,1:jperiod,1:kperiod) :: cgrn1,ctmp1
+integer :: i,j,k,ip,jp,kp
+real(dp) :: u,v,w
+real(dp) :: gval
+!$OMP PARALLEL DO &
+!$OMP DEFAULT(FIRSTPRIVATE), &
+!$OMP SHARED(cgrn)
+do k=klo_grn,khi_grn
+  kp=klo_grn_gbl+mod(k-klo_grn_gbl+kperiod/2-1,kperiod)
+  w=kp*dz
+  do j=jlo_grn,jhi_grn
+    jp=jlo_grn_gbl+mod(j-jlo_grn_gbl+jperiod/2-1,jperiod)
+    v=jp*dy
+   do i=ilo_grn,ihi_grn
+     ip=ilo_grn_gbl+mod(i-ilo_grn_gbl+iperiod/2-1,iperiod)
+     u=ip*dx
+     if(igfflag.eq.0.and.icomp.eq.0)gval=coulombfun(u,v,w,gam)
+     if(igfflag.eq.1.and.icomp.eq.0)gval=igfcoulombfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.1)gval=igfexfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.2)gval=igfeyfun(u,v,w,gam,dx,dy,dz)
+     if(igfflag.eq.1.and.icomp.eq.3)gval=igfezfun(u,v,w,gam,dx,dy,dz)
+     cgrn(i,j,k)= cmplx(gval,0.d0, dp)
+    enddo
+  enddo
+enddo
+!$OMP END PARALLEL DO
+!cgrn1(:,:,:)=cgrn(:,:,:)
+cgrn1(1:iperiod,1:jperiod,1:kperiod)=cgrn(ilo_grn:ihi_grn,jlo_grn:jhi_grn,klo_grn:khi_grn)
+!call ccfft3d(cgrn,ctmp,(/1,1,1/),iperiod,jperiod,kperiod,0) !can I do the fft in place? problematic in parallel code
+call ccfft3d(cgrn1,ctmp1,(/1,1,1/),iperiod,jperiod,kperiod,0) !can I do the fft in place? problematic in parallel code
+!write(6,*)cgrn(ilo_grn+8,jlo_grn+4,klo_grn+9)
+!cgrn(:,:,:)=ctmp1(:,:,:)
+cgrn(ilo_grn:ihi_grn,jlo_grn:jhi_grn,klo_grn:khi_grn)=ctmp1(1:iperiod,1:jperiod,1:kperiod)
+return
+end subroutine
+!
+subroutine conv3d(crhotilde,cgrntilde,phi,ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,&
+            ilo,ihi,jlo,jhi,klo,khi,iperiod,jperiod,kperiod)
+implicit none
+integer :: ilo2,ihi2,jlo2,jhi2,klo2,khi2,ilo_grn,ihi_grn,jlo_grn,jhi_grn,klo_grn,khi_grn,ilo,ihi,jlo,jhi,klo,khi
+integer :: iperiod,jperiod,kperiod
+complex(dp), dimension(ilo2:ihi2,jlo2:jhi2,klo2:khi2) :: crhotilde
+complex(dp), dimension(ilo_grn:ihi_grn,jlo_grn:jhi_grn,klo_grn:khi_grn) :: cgrntilde
+complex(dp), dimension(ilo2:ihi2,jlo2:jhi2,klo2:khi2) :: cphi2,ctmp2
+real(dp), dimension(ilo:ihi,jlo:jhi,klo:khi) :: phi
+real(dp), parameter :: econst=299792458.d0**2*1.d-7
+cphi2(:,:,:)=crhotilde(:,:,:)*cgrntilde(:,:,:)
+call ccfft3d(cphi2,ctmp2,(/-1,-1,-1/),iperiod,jperiod,kperiod,0)
+cphi2(:,:,:)=ctmp2(:,:,:)/((1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod))
+phi(ilo:ihi,jlo:jhi,klo:khi)=real(cphi2(ilo:ihi,jlo:jhi,klo:khi), dp)
+phi(ilo:ihi,jlo:jhi,klo:khi)=phi(ilo:ihi,jlo:jhi,klo:khi)*econst
+return
+end subroutine
 
 end module

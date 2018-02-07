@@ -50,7 +50,7 @@ sigma_y = 0.001
 sigma_z = 0.0001
 gaussiancutoff=5
 disttype=1 ! =0 for uniform, =1 for Gaussian
-direct_field_calc = .true.  
+direct_field_calc = .true.
 integrated_green_function = .true.
  
 !Read namelist

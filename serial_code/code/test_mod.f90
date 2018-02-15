@@ -1,3 +1,4 @@
+!This module contains extra routines (not related to OpenSC) used by the test code.
 module test_mod
 
 use, intrinsic :: iso_fortran_env
@@ -11,13 +12,12 @@ integer, parameter, private :: qp = REAL128
 
 contains
 
-
-
-
-      subroutine gendist(ptcls,n1,nraysp,sigmat,gaussiancutoff,disttype,iseed)
+      subroutine gendist(ptcls,n1,nraysp,sigmat,gaussiancutoff,disttype,iseed,apipe,bpipe,rectpipe)
      ! use mpi
       implicit none
       integer :: n1,nraysp,disttype,iseed
+      real(8) :: apipe,bpipe
+      logical :: rectpipe
       real(8), dimension(nraysp,n1) :: ptcls
       real(8), dimension(6,6) :: sigmat
       real(8) :: gaussiancutoff
@@ -42,6 +42,9 @@ contains
           r3=2.d0*r3-1.d0
           r5=2.d0*r5-1.d0
           if(r1*r1+r3*r3+r5*r5.gt.1.d0)goto 10
+          if(rectpipe)then
+            if(r1**2*sigmat(1,1)/(0.5*apipe)**2+r3**2*sigmat(3,3)/(0.5*bpipe)**2.gt.0.9**2)goto 10
+          endif
         endif
         if(disttype.eq.1)then
    11     continue
@@ -49,6 +52,9 @@ contains
           call normdv(r3,r4)
           call normdv(r5,r6)
           if(r1*r1+r3*r3+r5*r5.gt.gaussiancutoff**2)goto 11
+          if(rectpipe)then
+            if(r1**2*sigmat(1,1)/(0.5*apipe)**2+r3**2*sigmat(3,3)/(0.5*bpipe)**2.gt.0.9**2)goto 11
+          endif
         endif
         
 ! print *, 'gendist 1, n = ', n, r1*sqrt(sigmat(1,1))
@@ -73,6 +79,9 @@ contains
         ptcls(n,1:6)=ptcls(n,1:6)-cent(1:6)
       enddo
       ptcls(1,1:5)=0.d0 !zero out the first particle to see how the origin gets kicked around by space charge
+      write(6,*)'particle xmin,xmax=',minval(ptcls(1:nraysp,1)),maxval(ptcls(1:nraysp,1))
+      write(6,*)'particle ymin,ymax=',minval(ptcls(1:nraysp,3)),maxval(ptcls(1:nraysp,3))
+      write(6,*)'particle zmin,zmax=',minval(ptcls(1:nraysp,5)),maxval(ptcls(1:nraysp,5))
       return
       
        if(myrank.eq.0)print *, 'gendist end'
@@ -119,23 +128,34 @@ contains
       
       
       !diagnostics routines
-      subroutine prntall(nstep,n1,nraysp,nx,ny,nz,ptcls,hx,hy,hz,ex,ey,ez,t,dx,dy,dz,xmin,ymin,zmin)
+      subroutine prntall(nstep,n1,nraysp,nx,ny,nz,ptcls,efield,bfield,t,delta,umin,rectpipe)
       implicit none
+      real(8), dimension(3) :: delta,umin
       integer :: nstep,n1,nraysp,nx,ny,nz
+      logical :: rectpipe
       real(8) :: t,dx,dy,dz,xmin,ymin,zmin
-      real(8), dimension(nx,ny,nz) :: hx,hy,hz,ex,ey,ez
+      real(8), dimension(nx,ny,nz,3) :: efield,bfield
       real(8), dimension(nraysp,n1) :: ptcls
       character(32) :: pname,fname,fxname,fyname,fzname
       integer, parameter :: ndigits=4         !digits in filename suffix corr. to step#
       integer, parameter :: punit=2,funit=3,fxunit=7,fyunit=8,fzunit=9   !file unit numbers
       integer, parameter :: maxptclprnt=10000 !max# of particles printed
       
+      dx=delta(1); dy=delta(2); dz=delta(3)
+      xmin=umin(1); ymin=umin(2); zmin=umin(3)
       
       pname='ptcls' !prefix for particle filename
-      fname='fields' !prefix for field filename
-      fxname='xline' !field vs x
-      fyname='yline' !field vs y
-      fzname='zline' !field vs z
+      if(rectpipe)then
+        fname='fieldpipe' !prefix for field filename
+        fxname='xlinepipe' !field vs x
+        fyname='ylinepipe' !field vs y
+        fzname='zlinepipe' !field vs z
+      else
+        fname='fieldfree'
+        fxname='xlinefree'
+        fyname='ylinefree'
+        fzname='zlinefree'
+      endif
 !print particles:
       call openfile(pname,punit,nstep,ndigits)
       
@@ -149,13 +169,12 @@ contains
       call openfile(fzname,fzunit,nstep,ndigits)
       
       
-      call heprnt(hx,hy,hz,ex,ey,ez,nx,ny,nz,funit,fxunit,fyunit,fzunit,dx,dy,dz,xmin,ymin,zmin)
+      call ebprnt(efield(1,1,1,1),efield(1,1,1,2),efield(1,1,1,3),bfield(1,1,1,1),bfield(1,1,1,2),bfield(1,1,1,3), &
+                  nx,ny,nz,funit,fxunit,fyunit,fzunit,dx,dy,dz,xmin,ymin,zmin)
       close(funit); close(fxunit); close(fyunit); close(fzunit)
       return
+      end
       
-      contains
-
-!
       subroutine pprnt(ptcls,n1,nraysp,maxptclprnt,nfile)
       implicit none
       integer :: n1,nraysp,maxptclprnt,nfile
@@ -166,46 +185,46 @@ contains
       enddo
       return
       end
-      end
       
-      subroutine heprnt(hx,hy,hz,ex,ey,ez,nx,ny,nz,funit,fxunit,fyunit,fzunit,dx,dy,dz,xmin,ymin,zmin)
+!old routine where the components of e and b are in separate 1d arrays
+      subroutine ebprnt(ex,ey,ez,bx,by,bz,nx,ny,nz,funit,fxunit,fyunit,fzunit,dx,dy,dz,xmin,ymin,zmin)
       implicit none
       integer :: nx,ny,nz,funit,fxunit,fyunit,fzunit
       real(8) :: dx,dy,dz,xmin,ymin,zmin
-      real(8), dimension(nx,ny,nz) :: hx,hy,hz,ex,ey,ez
+      real(8), dimension(nx,ny,nz) :: ex,ey,ez,bx,by,bz
       integer :: i,j,k
 ! fields on the entire grid:
       do k=1,nz
       do j=1,ny
       do i=1,nx
-        write(funit,'(9(1pg12.5,1x),3i5)')xmin+(i-1)*dx,ymin+(j-1)*dy,zmin+(k-1)*dz,&
-     &                                    hx(i,j,k),hy(i,j,k),hz(i,j,k),ex(i,j,k),ey(i,j,k),ez(i,j,k),i,j,k
+        write(funit,'(9(1pg14.7,1x),3i5)')xmin+(i-1)*dx,ymin+(j-1)*dy,zmin+(k-1)*dz,&
+     &                                    ex(i,j,k),ey(i,j,k),ez(i,j,k),bx(i,j,k),by(i,j,k),bz(i,j,k),i,j,k
       enddo
       enddo
       enddo
 !    
 ! fields vs x along a line: 
-      j=ny/2
-      k=nz/2
+      j=ny/2+1   !   1-based, odd
+      k=nz/2+1   !   1-based, odd
       do i=1,nx
         write(fxunit,'(9(1pg12.5,1x),3i5)')xmin+(i-1)*dx,ymin+(j-1)*dy,zmin+(k-1)*dz,&
-     &                                    hx(i,j,k),hy(i,j,k),hz(i,j,k),ex(i,j,k),ey(i,j,k),ez(i,j,k),i,j,k
+     &                                    ex(i,j,k),ey(i,j,k),ez(i,j,k),bx(i,j,k),by(i,j,k),bz(i,j,k),i,j,k
       enddo
 !
 ! fields vs y along a line:
-      i=nx/2
-      k=nz/2
+      i=nx/2+1   !   1-based, odd
+      k=nz/2+1   !   1-based, odd
       do j=1,ny
         write(fyunit,'(9(1pg12.5,1x),3i5)')xmin+(i-1)*dx,ymin+(j-1)*dy,zmin+(k-1)*dz,&
-     &                                    hx(i,j,k),hy(i,j,k),hz(i,j,k),ex(i,j,k),ey(i,j,k),ez(i,j,k),i,j,k
+     &                                    ex(i,j,k),ey(i,j,k),ez(i,j,k),bx(i,j,k),by(i,j,k),bz(i,j,k),i,j,k
       enddo
 !
 ! fields vs z along a line:
-      i=nx/2
-      j=ny/2
+      i=nx/2+1   !   1-based, odd
+      j=ny/2+1   !   1-based, odd
       do k=1,nz
         write(fzunit,'(9(1pg12.5,1x),3i5)')xmin+(i-1)*dx,ymin+(j-1)*dy,zmin+(k-1)*dz,&
-     &                                    hx(i,j,k),hy(i,j,k),hz(i,j,k),ex(i,j,k),ey(i,j,k),ez(i,j,k),i,j,k
+     &                                    ex(i,j,k),ey(i,j,k),ez(i,j,k),bx(i,j,k),by(i,j,k),bz(i,j,k),i,j,k
       enddo
       return
       end
@@ -260,5 +279,188 @@ contains
       enddo
       return
       end   
+
+subroutine get_mesh_quantities(xa,ya,za,lostflag, delta,umin, nlo,nhi,nlo_gbl,nhi_gbl,n1,nraysp,maxrayp)
+!-!#ifdef MPIPARALLEL
+!     USE mpi
+!-!#endif
+implicit none
+integer, dimension(3) :: nlo,nhi,nlo_gbl,nhi_gbl
+real(dp), dimension(3) :: umin,delta
+integer :: n1,nraysp,maxrayp
+!-! real(dp), dimension(maxrayp,n1) :: ptcls
+!type (coord_struct) :: ptcls(maxrayp)
+!
+real(dp), dimension(maxrayp) :: xa,ya,za,lostflag !lostflag=1.0 if particle is "lost"
+real(dp) :: xmax,ymax,zmax !not needed
+integer :: ifail,n
+integer :: mprocs,myrank,ierr
+real(dp) :: xsml,xbig,ysml,ybig,zsml,zbig
+!     real(dp), parameter :: eps=2.d-15   !3.34d-16 is OK on my Mac
+real(dp), parameter :: eps=0.5d0
+integer :: nx,ny,nz !temporaries
+!-!#ifdef MPIPARALLEL
+!     call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+!     call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+!-!#else
+mprocs=1
+myrank=0
+!-!#endif
+!     if(myrank.eq.0)write(6,*)'hello from get_rho'
+      !xa(1:maxrayp)=ptcls(:)%vec(1) !-! ptcls(1:maxrayp,1)
+      !ya(1:maxrayp)=ptcls(:)%vec(3) !-! ptcls(1:maxrayp,3)
+      !za(1:maxrayp)=ptcls(:)%vec(5) !-! ptcls(1:maxrayp,5)
+      !lostflag(1:maxrayp)= ptcls(:)%state  !-! ptcls(1:maxrayp,7)
+! compute the bounding box and dx,dy,dz so particles can be localized to the correct proc:
+call getbeamboundingbox(xa,ya,za,lostflag,xsml,xbig,ysml,ybig,zsml,zbig,nraysp) !nraysp should be bigrayp?
+xbig=xbig*(1.d0+sign(1.d0,xbig)*eps)
+xsml=xsml*(1.d0-sign(1.d0,xsml)*eps)
+ybig=ybig*(1.d0+sign(1.d0,ybig)*eps)
+ysml=ysml*(1.d0-sign(1.d0,ysml)*eps)
+zbig=zbig*(1.d0+sign(1.d0,zbig)*eps)
+zsml=zsml*(1.d0-sign(1.d0,zsml)*eps)
+nx=nhi(1)-nlo(1)+1
+ny=nhi(2)-nlo(2)+1
+nz=nhi(3)-nlo(3)+1
+delta(1)=(xbig-xsml)/(nx-3)
+delta(2)=(ybig-ysml)/(ny-3)
+delta(3)=(zbig-zsml)/(nz-3)
+umin(1)=xsml-delta(1)  !why did I put xmax here? not needed.  ; xmax=xbig+delta(1)
+umin(2)=ysml-delta(2)  !why did I put ymax here? not needed.  ; ymax=ybig+delta(2)
+umin(3)=zsml-delta(3)  !why did I put zmax here? not needed.  ; zmax=zbig+delta(3)
+!
+!
+!-!#ifdef MPIPARALLEL
+! move particles to the correct proc:
+!     ptcls(1,1:nraysp)=xa(1:nraysp)
+!     ptcls(2,1:nraysp)=ya(1:nraysp)
+!     ptcls(3,1:nraysp)=za(1:nraysp)
+!     if(myrank.eq.0)write(6,*)'calling localize'
+!     call localize(ptcls,lostflag,xmin,ymin,zmin,dx,dy,dz,&
+!    &              ilo_gbl,ihi_gbl,jlo_gbl,jhi_gbl,klo_gbl,khi_gbl,n1,nraysp,maxrayp,idecomp,npx,npy,npz,mprocs)
+!     if(myrank.eq.0)write(6,*)'back from localize'
+!!deposit charge on the grid:
+!     xa(1:nraysp)=ptcls(1,1:nraysp)
+!     ya(1:nraysp)=ptcls(2,1:nraysp)
+!     za(1:nraysp)=ptcls(3,1:nraysp)
+!-!#endif
+
+end subroutine
+!
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+
+subroutine getbeamboundingbox(x,y,z,lostflag,xmin,xmax,ymin,ymax,zmin,zmax,nraysp)
+!-!#ifdef MPIPARALLEL
+!     USE mpi
+!-!#endif
+implicit none
+integer :: nraysp !!-!# of particles per MPI process
+real(dp), dimension(*) :: x,y,z,lostflag !lostflag=1.0 if particle is "lost"
+real(dp) :: xmin,xmax,ymin,ymax,zmin,zmax
+real(dp), dimension(6) :: veclcl,vecgbl
+real(dp) :: xminlcl,xmaxlcl,yminlcl,ymaxlcl,zminlcl,zmaxlcl
+real(dp) :: xwidthorig,ywidthorig,zwidthorig
+integer :: ierror
+!need this since, if nraysp=0, the next 6 statements are skipped
+veclcl(1:3)=-9999999.
+veclcl(4:6)=-9999999.
+if(nraysp > 0) then
+!     veclcl(1)=-minval(x(1:nraysp),lostflag(1:nraysp).eq.0.d0)
+!     veclcl(2)=-minval(y(1:nraysp),lostflag(1:nraysp).eq.0.d0)
+!     veclcl(3)=-minval(z(1:nraysp),lostflag(1:nraysp).eq.0.d0)
+!     veclcl(4)=maxval(x(1:nraysp),lostflag(1:nraysp).eq.0.d0)
+!     veclcl(5)=maxval(y(1:nraysp),lostflag(1:nraysp).eq.0.d0)
+!     veclcl(6)=maxval(z(1:nraysp),lostflag(1:nraysp).eq.0.d0)
+  veclcl(1)=-minval(x(1:nraysp))
+  veclcl(2)=-minval(y(1:nraysp))
+  veclcl(3)=-minval(z(1:nraysp))
+  veclcl(4)=maxval(x(1:nraysp))
+  veclcl(5)=maxval(y(1:nraysp))
+  veclcl(6)=maxval(z(1:nraysp))
+endif
+!-!#ifdef MPIPARALLEL
+!     call MPI_ALLREDUCE(veclcl,vecgbl,6,MPI_DOUBLE_PRECISION,MPI_MAX,MPI_COMM_WORLD,ierror)
+!-!#else
+vecgbl(1:6)=veclcl(1:6)
+!-!#endif
+xmin=-vecgbl(1)
+ymin=-vecgbl(2)
+zmin=-vecgbl(3)
+xmax=vecgbl(4)
+ymax=vecgbl(5)
+zmax=vecgbl(6)
+
+end subroutine
+
+!routine for charge deposition
+subroutine depose_rho_scalar(xa,ya,za,lostflag,rho,chrgpermacro,nlo,delta,umin,nraysp,nlogbl,ifail)
+!subroutine depose_rho_scalar(xa,ya,za,lostflag,rho,chrgpermacro,ilo,ihi,jlo,jhi,klo,khi,      &
+!                             delta,umin,nraysp,ilogbl,jlogbl,klogbl,ifail)
+!use mpi
+implicit none
+integer, intent(in) :: nraysp !!-!# of particles per MPI process
+integer, intent(out) :: ifail
+real(dp), intent(in) :: chrgpermacro
+real(dp), intent(in), dimension(:) :: xa,ya,za,lostflag
+integer, intent(in), dimension(3) :: nlo,nlogbl
+real(dp), intent(in), dimension(3) :: delta,umin
+integer :: ilo,jlo,klo,ihi,jhi,khi
+real(dp), intent(out), dimension(nlo(1):,nlo(2):,nlo(3):) :: rho
+real(dp) :: dx,dy,dz,xmin,ymin,zmin
+real(dp) :: dxi,dyi,dzi,ab,de,gh,sumrho
+integer :: ilogbl,jlogbl,klogbl
+integer :: n,ip,jp,kp
+integer :: mprocs,myrank,ierr
+
+!call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
+!call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
+
+ilo=nlo(1); jlo=nlo(2); klo=nlo(3); ihi=size(rho,1); jhi=size(rho,2); khi=size(rho,3)
+dx=delta(1); dy=delta(2); dz=delta(3)
+xmin=umin(1); ymin=umin(2); zmin=umin(3)
+ilogbl=nlogbl(1); jlogbl=nlogbl(2); klogbl=nlogbl(3)
+
+ifail=0
+dxi=1.d0/dx
+dyi=1.d0/dy
+dzi=1.d0/dz
+rho(ilo:ihi,jlo:jhi,klo:khi)=0.d0
+do n=1,nraysp
+  if(lostflag(n).ne.0.d0)cycle
+! ip=floor((xa(n)-xmin)*dxi+1) !this is 1-based; use ilogbl for the general case
+! jp=floor((ya(n)-ymin)*dyi+1)
+! kp=floor((za(n)-zmin)*dzi+1)
+! ab=((xmin-xa(n))+ip*dx)*dxi
+! de=((ymin-ya(n))+jp*dy)*dyi
+! gh=((zmin-za(n))+kp*dz)*dzi
+  ip=floor((xa(n)-xmin)*dxi+ilogbl)
+  jp=floor((ya(n)-ymin)*dyi+jlogbl)
+  kp=floor((za(n)-zmin)*dzi+klogbl)
+  ab=((xmin-xa(n))+(ip-ilogbl+1)*dx)*dxi
+  de=((ymin-ya(n))+(jp-jlogbl+1)*dy)*dyi
+  gh=((zmin-za(n))+(kp-klogbl+1)*dz)*dzi
+! this "if" statement slows things down, but I'm using it for debugging purposes
+  if(ip<ilo .or. jp<jlo .or. kp<klo .or. ip>ihi .or. jp>jhi .or. kp>khi)then
+    ifail=ifail+1
+    cycle
+  else
+    rho(ip,jp,kp)=rho(ip,jp,kp)+ab*de*gh
+    rho(ip,jp+1,kp)=rho(ip,jp+1,kp)+ab*(1.-de)*gh
+    rho(ip,jp+1,kp+1)=rho(ip,jp+1,kp+1)+ab*(1.-de)*(1.-gh)
+    rho(ip,jp,kp+1)=rho(ip,jp,kp+1)+ab*de*(1.-gh)
+    rho(ip+1,jp,kp+1)=rho(ip+1,jp,kp+1)+(1.-ab)*de*(1.-gh)
+    rho(ip+1,jp+1,kp+1)=rho(ip+1,jp+1,kp+1)+(1.-ab)*(1.-de)*(1.-gh)
+    rho(ip+1,jp+1,kp)=rho(ip+1,jp+1,kp)+(1.-ab)*(1.-de)*gh
+    rho(ip+1,jp,kp)=rho(ip+1,jp,kp)+(1.-ab)*de*gh
+  endif
+enddo
+rho=rho*chrgpermacro
+if(ifail.ne.0)write(6,*)'(depose_rho_scalar) ifail=',ifail,' on process ',myrank
+
+end subroutine
       
 end module               

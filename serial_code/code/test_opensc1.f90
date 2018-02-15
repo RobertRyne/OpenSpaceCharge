@@ -1,10 +1,12 @@
 ! Test code for the OpenSC space-charge package
 ! R.D. Ryne and C. Mayes, February 2018
 program opensc_test
+use open_spacecharge_mod1
 use open_spacecharge_mod, only : REAL64, osc_freespace_solver, osc_alloc_freespace_array, osc_rectpipe_solver, &
                                  osc_getgrnpipe, osc_alloc_rectpipe_arrays, osc_read_rectpipe_grn, osc_write_rectpipe_grn
 use test_mod, only : gendist, get_mesh_quantities, depose_rho_scalar, prntall
 implicit none
+type(mesh3d_struct) :: mesh3d
 integer, parameter :: dp = REAL64
 
 real(dp), allocatable, dimension(:,:,:) :: rho,phi  !charge density, potential
@@ -137,11 +139,27 @@ write(6,*)'mesh zmin,zmax=',umin(3),umax(3)
 call depose_rho_scalar(ptcl(:,1),ptcl(:,3),ptcl(:,5),lostflag,rho,chrgpermacro,nlo,delta,umin,n_particle,nlo,ifail)
 write(6,*)'Done with charge deposition'
 
+  mesh3d%nlo = [nxlo, nylo, nzlo]
+  mesh3d%nhi = [nxhi, nyhi, nzhi]
+  mesh3d%gamma = gamma
+  mesh3d%delta = [delta(1), delta(2), delta(3)]
+  mesh3d%min = [umin(1), umin(2), umin(3)]
+  mesh3d%max = [umax(1), umax(2), umax(3)]
+  mesh3d%npad = [npad(1), npad(2), npad(3)]
+  mesh3d%rho = rho
+! mesh3d%phi = phi
+! mesh3d%efield = efield
+! mesh3d%bfield = bfield
+if(.not.allocated(mesh3d%phi))allocate(mesh3d%phi(nlo(1):nhi(1),nlo(2):nhi(2),nlo(3):nhi(3)))
+if(.not.allocated(mesh3d%efield))allocate(mesh3d%efield(nlo(1):nhi(1),nlo(2):nhi(2),nlo(3):nhi(3),1:3))
+if(.not.allocated(mesh3d%bfield))allocate(mesh3d%bfield(nlo(1):nhi(1),nlo(2):nhi(2),nlo(3):nhi(3),1:3))
+
 !======= Compute the space-charge fields =======
 if(.not.rectpipe)then !FREE SPACE
   print *, 'Space charge field calc with free-space boundary condition...'
   call osc_alloc_freespace_array(nlo,nhi,npad)
-  call osc_freespace_solver(rho,gamma,delta,phi,efield,bfield,nlo,nhi,nlo,nhi,npad,idirectfieldcalc,igfflag)
+!!call osc_freespace_solver(rho,gamma,delta,phi,efield,bfield,nlo,nhi,nlo,nhi,npad,idirectfieldcalc,igfflag)
+  call space_charge_freespace(mesh3d, direct_field_calc, integrated_green_function)
 endif
 if(rectpipe)then      !RECTANGULAR PIPE
   print *, 'Space charge field calc with rectangular pipe boundary condition...'
@@ -155,9 +173,10 @@ if(rectpipe)then      !RECTANGULAR PIPE
     write(6,*)'...done computing Green functions and transforms'
     if(write_rectpipe)call osc_write_rectpipe_grn(apipe,bpipe,delta,umin,umax,nlo,nhi,gamma)
   endif
-  call osc_rectpipe_solver(rho,apipe,bpipe,gamma,delta,umin,phi,efield,bfield,nlo,nhi,nlo,nhi,idirectfieldcalc,igfflag)
+!!call osc_rectpipe_solver(rho,apipe,bpipe,gamma,delta,umin,phi,efield,bfield,nlo,nhi,nlo,nhi,idirectfieldcalc,igfflag)
+  call space_charge_rectpipe(mesh3d,apipe,bpipe, direct_field_calc, integrated_green_function)
 endif
 print *, '...done'
 !diagnostics:
-call prntall(0,n1,n_particle,size(phi,1),size(phi,2),size(phi,3),ptcl,efield,bfield,tval,delta,umin,rectpipe)
+call prntall(0,n1,n_particle,size(phi,1),size(phi,2),size(phi,3),ptcl,mesh3d%efield,mesh3d%bfield,tval,delta,umin,rectpipe)
 end program

@@ -19,8 +19,8 @@ integer, parameter, private :: sp = REAL32
 integer, parameter, private :: dp = REAL64
 integer, parameter, private :: qp = REAL128
 !the following arrays are Green function arrays used by the rectangular pipe solver
-complex(dp), save, allocatable, dimension(:,:,:) :: cgrn1,cgrn2,cgrn3,cgrn4
-integer, save :: g1ilo,g1jlo,g1klo,g2ilo,g2jlo,g2klo,g3ilo,g3jlo,g3klo,g4ilo,g4jlo,g4klo !lower bounds of grn1234 arrays
+complex(dp), allocatable, dimension(:,:,:) :: cgrn1,cgrn2,cgrn3,cgrn4
+integer :: g1ilo,g1jlo,g1klo,g2ilo,g2jlo,g2klo,g3ilo,g3jlo,g3klo,g4ilo,g4jlo,g4klo !lower bounds of grn1234 arrays
 
 contains
 

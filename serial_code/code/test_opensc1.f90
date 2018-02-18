@@ -2,8 +2,7 @@
 ! R.D. Ryne and C. Mayes, February 2018
 program opensc_test
 use open_spacecharge_mod1
-use open_spacecharge_mod, only : REAL64, osc_freespace_solver, osc_alloc_freespace_array, osc_rectpipe_solver, &
-                                 osc_getgrnpipe, osc_alloc_rectpipe_arrays, osc_read_rectpipe_grn, osc_write_rectpipe_grn
+use open_spacecharge_mod ! contains routines that begin with osc_ and some global variables that must persist for thread safety
 use test_mod, only : gendist, get_mesh_quantities, depose_rho_scalar, prntall
 implicit none
 type(mesh3d_struct) :: mesh3d

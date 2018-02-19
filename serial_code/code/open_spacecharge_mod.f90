@@ -54,23 +54,21 @@ myrank=0
 
 dx=delta(1); dy=delta(2); dz=delta(3)
 ilo=nlo(1);ihi=nhi(1);jlo=nlo(2);jhi=nhi(2);klo=nlo(3);khi=nhi(3)
-
 ilo2=ilo; jlo2=jlo; klo2=klo
+
+if(.not.allocated(cgrn1))call osc_alloc_freespace_array(nlo,nhi,npad)
+
 iperiod=size(cgrn1,1); jperiod=size(cgrn1,2); kperiod=size(cgrn1,3)
 ihi2=ilo2+iperiod-1; jhi2=jlo2+jperiod-1; khi2=klo2+kperiod-1
-
+allocate(crho(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size complex array for the charge density
 write(6,*)'iperiod,jperiod,kperiod=',iperiod,jperiod,kperiod
+
 if(idirectfieldcalc.eq.0)then
   if(myrank.eq.0)write(6,*)'Solving for Phi'
   icomp=0
 !compute/store the FFT of the charge density:
-if(.not.allocated(crho))allocate(crho(ilo2:ihi2,jlo2:jhi2,klo2:khi2)) !double-size array
 call getrhotilde(rho,crho,ilo,jlo,klo)
 !compute/store the FFT of the green function:
-if(.not.allocated(cgrn1))then
-  write(6,*)'something wrong. freespace green function should have been allocated during initialization'
-  stop
-endif
 call osc_getgrnfree(cgrn1,delta,gam0,g1ilo,g1jlo,g1klo,npad,icomp,igfflag)
 !compute the convolution:   (note that crho,cgrn1 are complex padded, phi is real not padded)
 call conv3d(crho,cgrn1,phi,ilo,jlo,klo,g1ilo,g1jlo,g1klo,ilo,jlo,klo,iperiod,jperiod,kperiod)

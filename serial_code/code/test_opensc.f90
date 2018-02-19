@@ -139,7 +139,6 @@ write(6,*)'Done with charge deposition'
 !======= Compute the space-charge fields =======
 if(.not.rectpipe)then !FREE SPACE
   print *, 'Space charge field calc with free-space boundary condition...'
-  call osc_alloc_freespace_array(nlo,nhi,npad)
   call osc_freespace_solver(rho,gamma,delta,phi,efield,bfield,nlo,nhi,nlo,nhi,npad,idirectfieldcalc,igfflag)
 endif
 if(rectpipe)then      !RECTANGULAR PIPE

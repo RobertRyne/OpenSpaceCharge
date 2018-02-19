@@ -156,7 +156,6 @@ if(.not.allocated(mesh3d%bfield))allocate(mesh3d%bfield(nlo(1):nhi(1),nlo(2):nhi
 !======= Compute the space-charge fields =======
 if(.not.rectpipe)then !FREE SPACE
   print *, 'Space charge field calc with free-space boundary condition...'
-  call osc_alloc_freespace_array(nlo,nhi,npad)
 !!call osc_freespace_solver(rho,gamma,delta,phi,efield,bfield,nlo,nhi,nlo,nhi,npad,idirectfieldcalc,igfflag)
   call space_charge_freespace(mesh3d, direct_field_calc, integrated_green_function)
 endif

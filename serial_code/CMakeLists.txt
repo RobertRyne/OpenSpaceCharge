@@ -5,7 +5,7 @@ enable_language(Fortran)
 
 if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
 ##    set(dialect "-Wall -ffree-form -ffree-line-length-none -std=f2008 -fimplicit-none")
-        set(dialect "-Wconversion -ffree-form -ffree-line-length-none   -std=f2008 -fimplicit-none")
+    set(dialect "-Wconversion -ffree-form -ffree-line-length-none  -cpp -std=f2008 -fimplicit-none") 
     set(bounds "-fbounds-check")
 endif()
 if(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
@@ -23,15 +23,19 @@ set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${dialect}")
 
 find_package(OpenMP)
 if (OPENMP_FOUND)
-    set (CMAKE_Fortran_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_Fortran_FLAGS}")
+    set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
 endif()
 
-
+#--------------------------------------------
+#--------------------------------------------
+option(use_fftw "USE_FFTW" OFF)
+if(use_fftw)
+    add_definitions(-DUSE_FFTW)
+    message(STATUS "Using FFTW")
 
 #--------------------------------------------
 option(GetFFTW "GetFFTW" ON)
 if(GetFFTW)
-
 # FFTW3 
 include(ExternalProject)
 ExternalProject_Add(project_fftw
@@ -59,20 +63,41 @@ include_directories(${install_dir}/include)
 
 endif(GetFFTW)
 #--------------------------------------------
-
-
+endif()
+#--------------------------------------------
+#--------------------------------------------
 
 
 #
 # Compile.
 #
 
-file(GLOB_RECURSE sources  code/*.f90 code/*.h)
+#file(GLOB_RECURSE sources  code/*.f90 code/*.h)
+
+set(sources
+    code/fast_fourier_am.f90
+    code/fft_interface_mod.f90
+    code/open_spacecharge_mod.f90
+    code/open_spacecharge_mod1.f90
+    code/test_mod.f90
+    code/test_opensc1.f90
+)
+
 add_executable(test_opensc ${sources})
-add_dependencies(test_opensc fftw)
+
 # Link FFTW
 #
-target_link_libraries(test_opensc fftw fftw_omp)
+if(GetFFTW)
+    add_dependencies(test_opensc fftw)
+    target_link_libraries(test_opensc fftw fftw_omp)
+endif()
 
-
+# Library
+add_library(openspacecharge STATIC 
+    code/fast_fourier_am.f90
+    code/fft_interface_mod.f90
+    code/open_spacecharge_mod.f90
+    code/open_spacecharge_mod1.f90)
+    
+        
 

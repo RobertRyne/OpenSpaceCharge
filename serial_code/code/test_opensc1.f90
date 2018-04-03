@@ -1,6 +1,6 @@
 ! Test code for the OpenSC space-charge package
 ! R.D. Ryne and C. Mayes, February 2018
-program opensc_test
+program opensc_test1
 use open_spacecharge_mod1
 use open_spacecharge_mod ! contains routines that begin with osc_ and some global variables that must persist for thread safety
 use test_mod, only : gendist, get_mesh_quantities, depose_rho_scalar, prntall
@@ -87,9 +87,9 @@ WRITE(*, opensc_test_params)
 print *, '------------------------'
 
 !these control the size of the rho,phi,field grids and the length of the FFTs
-nlo=(/nxlo,nylo,nzlo/)
-nhi=(/nxhi,nyhi,nzhi/)
-npad=(/ipad,jpad,kpad/)
+nlo=[nxlo,nylo,nzlo]
+nhi=[nxhi,nyhi,nzhi]
+npad=[ipad,jpad,kpad]
 
 gamma = e_tot/mc2
 gambet=sqrt((gamma+1.d0)*(gamma-1.d0))

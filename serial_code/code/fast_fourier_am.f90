@@ -24,13 +24,13 @@ CONTAINS
 
 subroutine ccfftam(c,n,isn,ierr)
 implicit none
-complex*16, dimension(*), intent(inout) :: c !note that I got rank mismatch when * replaced with :
-real*8, dimension(n) :: a,b
+complex(dp), dimension(*), intent(inout) :: c !note that I got rank mismatch when * replaced with :
 integer :: n,isn,ierr
+real(dp), dimension(n) :: a,b
 a(1:n)=real(c(1:n))
 b(1:n)=aimag(c(1:n))
 call fft1(a,b,n,isn,ierr)
-c(1:n)=dcmplx(a(1:n),b(1:n))
+c(1:n)=cmplx(a(1:n),b(1:n), dp)
 return
 end subroutine ccfftam
 

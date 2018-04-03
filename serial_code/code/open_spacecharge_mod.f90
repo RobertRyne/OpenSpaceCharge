@@ -7,9 +7,9 @@ module open_spacecharge_mod
 use, intrinsic :: iso_fortran_env
 !uncomment the following for the version that uses the 1D FFT from Alan Miller's web page
 !and compile with: gfortran test_mod.f90 fast_fourier_am.f90 open_spacecharge_mod.f90 test_opensc.f90
-use fast_fourier_am
+!use fast_fourier_am
 !uncomment the following for the version that uses FFTW:
-!nofftw use fft_interface_mod
+use fft_interface_mod
 !$ use omp_lib
 
 implicit none
@@ -127,23 +127,29 @@ enddo
 
 end subroutine osc_freespace_solver
 
-  subroutine osc_alloc_freespace_array(nlo,nhi,npad)
-  implicit none
-  integer, intent(in), dimension(3) :: nlo,nhi,npad
-  integer :: rilo,rihi,rjlo,rjhi,rklo,rkhi !rho dimensions
-  integer :: cilo,cihi,cjlo,cjhi,cklo,ckhi !phi dimensions
-  integer :: ipad,jpad,kpad
-  integer :: g1ihi,g1jhi,g1khi
 
-  rilo=nlo(1); rihi=nhi(1); rjlo=nlo(2); rjhi=nhi(2); rklo=nlo(3); rkhi=nhi(3)
-  cilo=nlo(1); cihi=nhi(1); cjlo=nlo(2); cjhi=nhi(2); cklo=nlo(3); ckhi=nhi(3)
-  ipad=npad(1); jpad=npad(2); kpad=npad(3)
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+subroutine osc_alloc_freespace_array(nlo,nhi,npad)
+implicit none
+integer, intent(in), dimension(3) :: nlo,nhi,npad
+integer :: rilo,rihi,rjlo,rjhi,rklo,rkhi !rho dimensions
+integer :: cilo,cihi,cjlo,cjhi,cklo,ckhi !phi dimensions
+integer :: ipad,jpad,kpad
+integer :: g1ihi,g1jhi,g1khi
 
-  g1ilo=cilo-rihi; g1ihi=cihi-rilo; g1jlo=cjlo-rjhi; g1jhi=cjhi-rjlo; g1klo=cklo-rkhi; g1khi=ckhi-rklo
-  if(.not.allocated(cgrn1))allocate(cgrn1(g1ilo:g1ihi+ipad,g1jlo:g1jhi+jpad,g1klo:g1khi+kpad))
-  return
-  end subroutine osc_alloc_freespace_array
-!
+rilo=nlo(1); rihi=nhi(1); rjlo=nlo(2); rjhi=nhi(2); rklo=nlo(3); rkhi=nhi(3)
+cilo=nlo(1); cihi=nhi(1); cjlo=nlo(2); cjhi=nhi(2); cklo=nlo(3); ckhi=nhi(3)
+ipad=npad(1); jpad=npad(2); kpad=npad(3)
+
+g1ilo=cilo-rihi; g1ihi=cihi-rilo; g1jlo=cjlo-rjhi; g1jhi=cjhi-rjlo; g1klo=cklo-rkhi; g1khi=ckhi-rklo
+if(.not.allocated(cgrn1))allocate(cgrn1(g1ilo:g1ihi+ipad,g1jlo:g1jhi+jpad,g1klo:g1khi+kpad))
+return
+end subroutine osc_alloc_freespace_array
+
+
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
@@ -384,71 +390,6 @@ end function zlafun
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-subroutine ccfft3d(a,b,idir,n1,n2,n3,iskiptrans)
-implicit none
-integer, dimension(3) :: idir
-complex(dp), dimension(:,:,:) :: a,b
-complex(dp), allocatable :: tmp1(:,:,:), tmp2(:,:,:)
-integer :: n1,n2,n3
-integer :: iskiptrans
-integer :: ileft,iright,i,j,k
-b(:,:,:)=a(:,:,:)
-allocate(tmp1(n2,n1,n3))
-allocate(tmp2(n3,n2,n1))
-if(idir(1).eq.0.and.idir(2).eq.0.and.idir(3).eq.0)return
-call mccfft1d(b,n2*n3,n1,idir(1))
-forall(k=1:n3, j=1:n2, i=1:n1)
-! there's some problem with the commented out statements
-!       iright=(k-1)*n1*n2+(j-1)*n2+i
-!       ileft =(k-1)*n2*n1+(i-1)*n1+j
-!       tmp(ileft)=b(iright)
-  tmp1(j,i,k)=b(i,j,k)
-end forall
-
-call mccfft1d(tmp1,n3*n1,n2,idir(2))
-forall(k=1:n3, j=1:n2, i=1:n1)
-!       iright=(k-1)*n2*n1+(i-1)*n1+j
-!       ileft =(i-1)*n2*n3+(j-1)*n3+k
-!       b(ileft)=tmp(iright)
-  tmp2(k,j,i)=tmp1(j,i,k)
-end forall
-
-call mccfft1d(tmp2,n1*n2,n3,idir(3))
-if(iskiptrans.eq.1)return
-forall(k=1:n3, j=1:n2, i=1:n1)
-!       ileft =(k-1)*n1*n2+(j-1)*n2+i
-!       iright=(i-1)*n2*n3+(j-1)*n3+k
-!       b(ileft)=tmp(iright)
-        b(i,j,k)=tmp2(k,j,i)
-end forall
-
-end subroutine 
-!------------------------------------------------------------------------
-!------------------------------------------------------------------------
-!-------------------------------ccfftnr-----------------------------------------
-!+
-subroutine mccfft1d(a,ntot,lenfft,idir)
-implicit none
-complex(dp), dimension(*) :: a
-integer :: ntot,lenfft,idir
-integer :: n,ierr
-do n=1,ntot*lenfft,lenfft
-  call ccfftam(a(n),lenfft,idir,ierr)  ! Alan Miller version of FFT package
-  if(ierr.ne.0)then
-    write(6,*)'Error return from FFT package due to transform length.'
-    write(6,*)'Try increasing the padding by 1 in each dimension and re-run'
-    stop
-  endif
-! call ccfftnr(a(n),lenfft,idir) !numerical recipes power-of-2 routine
-! call gsl_fft(a(n),lenfft,idir)
-enddo
-return
-end
-
-!------------------------------------------------------------------------
-!------------------------------------------------------------------------
-!------------------------------------------------------------------------
-!+
 subroutine ccfftnr(cdata,nn,isign)
 implicit none
 integer nn,isign,i,j,n,m,istep,mmax
@@ -548,6 +489,7 @@ iperiod=size(cgrn,1); jperiod=size(cgrn,2); kperiod=size(cgrn,3)
 ipad=npad(1); jpad=npad(2); kpad=npad(3)
 !this puts the Green function where it's needed so the convolution ends up in the correct location in the array
 ishift=iperiod/2-(ipad+1)/2; jshift=jperiod/2-(jpad+1)/2; kshift=kperiod/2-(kpad+1)/2
+!$ print *, 'OpenMP Green function calc'
 !$OMP PARALLEL DO &
 !$OMP DEFAULT(FIRSTPRIVATE), &
 !$OMP SHARED(cgrn)
@@ -571,36 +513,44 @@ do k=klo_grn,ubound(cgrn,3)
 enddo
 !$OMP END PARALLEL DO
 call ccfft3d(cgrn,cgrn,(/1,1,1/),iperiod,jperiod,kperiod,0)
-return
+
 end subroutine osc_getgrnfree
 
-      subroutine conv3d(crho,qgrn1,con,rilo,rjlo,rklo,g1ilo,g1jlo,g1klo,cilo,cjlo,cklo,iperiod,jperiod,kperiod)
-      implicit none
-      integer :: rilo,rjlo,rklo,g1ilo,g1jlo,g1klo,cilo,cjlo,cklo,iperiod,jperiod,kperiod
+
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+subroutine conv3d(crho,qgrn1,con,rilo,rjlo,rklo,g1ilo,g1jlo,g1klo,cilo,cjlo,cklo,iperiod,jperiod,kperiod)
+implicit none
+integer :: rilo,rjlo,rklo,g1ilo,g1jlo,g1klo,cilo,cjlo,cklo,iperiod,jperiod,kperiod
 !input arrays:
-      complex(dp), dimension(rilo:,rjlo:,rklo:) :: crho
-      complex(dp), dimension(g1ilo:,g1jlo:,g1klo:) :: qgrn1
-      real(dp), dimension(cilo:,cjlo:,cklo:) :: con
+complex(dp), dimension(rilo:,rjlo:,rklo:) :: crho
+complex(dp), dimension(g1ilo:,g1jlo:,g1klo:) :: qgrn1
+real(dp), dimension(cilo:,cjlo:,cklo:) :: con
 ! local:
-      complex(dp), allocatable, dimension(:,:,:) :: ccon
-      real*8 :: fpei,qtot,factr
-      integer :: cihi,cjhi,ckhi
-      fpei=299792458.d0**2*1.d-7  ! this is 1/(4 pi eps0)
-      qtot=1.d0 !fix later: 1.d-9 ! 1 nC
-      allocate(ccon(cilo:cilo+iperiod-1,cjlo:cjlo+jperiod-1,cklo:cklo+kperiod-1))
-      ccon(:,:,:)=crho(:,:,:)*qgrn1(:,:,:)
-      call ccfft3d(ccon,ccon,(/-1,-1,-1/),iperiod,jperiod,kperiod,0)
+complex(dp), allocatable, dimension(:,:,:) :: ccon
+real(dp) :: fpei,qtot,factr
+integer :: cihi,cjhi,ckhi
+fpei=299792458.d0**2*1.d-7  ! this is 1/(4 pi eps0)
+qtot=1.d0 !fix later: 1.d-9 ! 1 nC
+allocate(ccon(cilo:cilo+iperiod-1,cjlo:cjlo+jperiod-1,cklo:cklo+kperiod-1))
+ccon(:,:,:)=crho(:,:,:)*qgrn1(:,:,:)
+call ccfft3d(ccon,ccon,(/-1,-1,-1/),iperiod,jperiod,kperiod,0)
 !normalize:
 !     factr=hx*hy*hz/( (1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod) )*fpei*qtot
-      factr=    1.d0/( (1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod) )*fpei*qtot
+factr=    1.d0/( (1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod) )*fpei*qtot
 !store final result in original size (not double size) real array:
-      cihi=ubound(con,1)
-      cjhi=ubound(con,2)
-      ckhi=ubound(con,3)
-      con(cilo:cihi,cjlo:cjhi,cklo:ckhi)=factr*real(ccon(cilo:cihi,cjlo:cjhi,cklo:ckhi),dp)
-      return
-      end
-!
+cihi=ubound(con,1)
+cjhi=ubound(con,2)
+ckhi=ubound(con,3)
+con(cilo:cihi,cjlo:cjhi,cklo:ckhi)=factr*real(ccon(cilo:cihi,cjlo:cjhi,cklo:ckhi),dp)
+
+end subroutine conv3d
+
+
+
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
@@ -656,21 +606,21 @@ call fftconvcorr3d(crho,cgrn1,cgrn2,cgrn3,cgrn4,phi,ilo,jlo,klo, &
 write(6,*)'finished convolutions and correlations'
 
 !original version did not handle the edge values correctly when differencing; here is a first order approx:
-  do k=lbound(phi,3),ubound(phi,3)
-    km1=k-1; if(km1.lt.lbound(phi,3))km1=k
-    kp1=k+1; if(kp1.gt.ubound(phi,3))kp1=k
-    zfac=merge(2.d0,1.d0,(km1.eq.k).or.(kp1.eq.k))
-    do j=lbound(phi,2),ubound(phi,2)
-      jm1=j-1; if(jm1.lt.lbound(phi,2))jm1=j
-      jp1=j+1; if(jp1.gt.ubound(phi,2))jp1=j
-      yfac=merge(2.d0,1.d0,(jm1.eq.j).or.(jp1.eq.j))
+do k=lbound(phi,3),ubound(phi,3)
+  km1=k-1; if(km1.lt.lbound(phi,3))km1=k
+  kp1=k+1; if(kp1.gt.ubound(phi,3))kp1=k
+  zfac=merge(2.d0,1.d0,(km1.eq.k).or.(kp1.eq.k))
+  do j=lbound(phi,2),ubound(phi,2)
+    jm1=j-1; if(jm1.lt.lbound(phi,2))jm1=j
+    jp1=j+1; if(jp1.gt.ubound(phi,2))jp1=j
+    yfac=merge(2.d0,1.d0,(jm1.eq.j).or.(jp1.eq.j))
       do i=lbound(phi,1),ubound(phi,1)
         im1=i-1; if(im1.lt.lbound(phi,1))im1=i
         ip1=i+1; if(ip1.gt.ubound(phi,1))ip1=i
         xfac=merge(2.d0,1.d0,(im1.eq.i).or.(ip1.eq.i))
-          efield(i,j,k,1)=-(phi(ip1,j,k)-phi(im1,j,k))/(2.d0*dx)*gam0*xfac
-          efield(i,j,k,2)=-(phi(i,jp1,k)-phi(i,jm1,k))/(2.d0*dy)*gam0*yfac
-          efield(i,j,k,3)=-(phi(i,j,kp1)-phi(i,j,km1))/(2.d0*dz)/gam0*zfac
+        efield(i,j,k,1)=-(phi(ip1,j,k)-phi(im1,j,k))/(2.d0*dx)*gam0*xfac
+        efield(i,j,k,2)=-(phi(i,jp1,k)-phi(i,jm1,k))/(2.d0*dy)*gam0*yfac
+        efield(i,j,k,3)=-(phi(i,j,kp1)-phi(i,j,km1))/(2.d0*dz)/gam0*zfac
       enddo
     enddo
   enddo
@@ -694,237 +644,279 @@ enddo
 
 end subroutine osc_rectpipe_solver
 
-      subroutine osc_getgrnpipe(gam,a,b,delta,umin,npad)
-!makes use of arrays cgrn1,cgrn2,cgrn3,cgrn4 declared at the beginning of this module
-      implicit none
-      real*8, dimension(3) :: delta,umin
-      integer, dimension(3) :: npad
-      integer :: ipad,jpad,kpad,ishift,jshift,kshift,iperiod,jperiod,kperiod
-      real*8 :: gam,a,b,hx,hy,hz,xmin,ymin,zmin
-      real*8 :: u,v,w
-      integer :: i,j,k,ip,jp,kp
-!     real*8, external ::rfun
 
-      hx=delta(1); hy=delta(2); hz=delta(3)
-      xmin=umin(1); ymin=umin(2); zmin=umin(3)
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+subroutine osc_getgrnpipe(gam,a,b,delta,umin,npad)
+!makes use of arrays cgrn1,cgrn2,cgrn3,cgrn4 declared at the beginning of this module
+implicit none
+real(dp), dimension(3) :: delta,umin
+integer, dimension(3) :: npad
+integer :: ipad,jpad,kpad,ishift,jshift,kshift,iperiod,jperiod,kperiod
+real(dp) :: gam,a,b,hx,hy,hz,xmin,ymin,zmin
+real(dp) :: u,v,w
+integer :: i,j,k,ip,jp,kp
+!     real(dp), external ::rfun
+
+hx=delta(1); hy=delta(2); hz=delta(3)
+xmin=umin(1); ymin=umin(2); zmin=umin(3)
 !
-      iperiod=size(cgrn1,1); jperiod=size(cgrn1,2); kperiod=size(cgrn1,3)
-      ipad=npad(1); jpad=npad(2); kpad=npad(3)
+iperiod=size(cgrn1,1); jperiod=size(cgrn1,2); kperiod=size(cgrn1,3)
+ipad=npad(1); jpad=npad(2); kpad=npad(3)
 !this puts the Green function where it's needed so the convolution ends up in the correct location in the array
       ishift=iperiod/2-(ipad+1)/2; jshift=jperiod/2-(jpad+1)/2; kshift=kperiod/2-(kpad+1)/2
 !
 !1:
-      do k=g1klo,ubound(cgrn1,3)
-      do j=g1jlo,ubound(cgrn1,2)
-      do i=g1ilo,ubound(cgrn1,1)
-        ip=g1ilo+mod(i-g1ilo+ishift,iperiod)
-        jp=g1jlo+mod(j-g1jlo+jshift,jperiod)
-        kp=g1klo+mod(k-g1klo+kshift,kperiod)
-        w=kp*hz
-        v=jp*hy
-        u=ip*hx
-        cgrn1(i,j,k)=dcmplx(0.d0,0.d0)
-        cgrn1(i,j,k)=rfun(u,v,w,gam,a,b,hz,1,1)
-      enddo
-      enddo
-      enddo
-      call ccfft3d(cgrn1,cgrn1,(/1,1,1/),iperiod,jperiod,kperiod,0)
-!2:
-      do k=g2klo,ubound(cgrn2,3)
-      do j=g2jlo,ubound(cgrn2,2)
-      do i=g2ilo,ubound(cgrn2,1)
-        ip=g2ilo+mod(i-g2ilo+ishift,iperiod)
-        kp=g2klo+mod(k-g2klo+kshift,kperiod)
-        w=kp*hz
-        v=2.d0*ymin+(j-g2jlo)*hy ! v=2.d0*ymin+j*hy
-        u=ip*hx
-        cgrn2(i,j,k)=dcmplx(0.d0,0.d0)
-        cgrn2(i,j,k)=rfun(u,v,w,gam,a,b,hz,1,-1)
-      enddo
-      enddo
-      enddo
-      call ccfft3d(cgrn2,cgrn2,(/1,-1,1/),iperiod,jperiod,kperiod,0)
-!3:
-      do k=g3klo,ubound(cgrn3,3)
-      do j=g3jlo,ubound(cgrn3,2)
-      do i=g3ilo,ubound(cgrn3,1)
-        jp=g3jlo+mod(j-g3jlo+jshift,jperiod)
-        kp=g3klo+mod(k-g3klo+kshift,kperiod)
-        w=kp*hz
-        v=jp*hy
-        u=2.d0*xmin+(i-g3ilo)*hx ! u=2.d0*xmin+i*hx
-        cgrn3(i,j,k)=dcmplx(0.d0,0.d0)
-        cgrn3(i,j,k)=rfun(u,v,w,gam,a,b,hz,-1,1)
-      enddo
-      enddo
-      enddo
-      call ccfft3d(cgrn3,cgrn3,(/-1,1,1/),iperiod,jperiod,kperiod,0)
-!4:
-      do k=g4klo,ubound(cgrn4,3)
-      do j=g4jlo,ubound(cgrn4,2)
-      do i=g4ilo,ubound(cgrn4,1)
-        kp=g4klo+mod(k-g4klo+kshift,kperiod)
-        w=kp*hz
-        v=2.d0*ymin+(j-g4jlo)*hy ! v=2.d0*ymin+j*hy
-        u=2.d0*xmin+(i-g4ilo)*hx ! u=2.d0*xmin+i*hx
-        cgrn4(i,j,k)=dcmplx(0.d0,0.d0)
-        cgrn4(i,j,k)=rfun(u,v,w,gam,a,b,hz,-1,-1)
-      enddo
-      enddo
-      enddo
-      call ccfft3d(cgrn4,cgrn4,(/-1,-1,1/),iperiod,jperiod,kperiod,0)
-      return
-      end subroutine osc_getgrnpipe
+do k=g1klo,ubound(cgrn1,3)
+do j=g1jlo,ubound(cgrn1,2)
+do i=g1ilo,ubound(cgrn1,1)
+  ip=g1ilo+mod(i-g1ilo+ishift,iperiod)
+  jp=g1jlo+mod(j-g1jlo+jshift,jperiod)
+  kp=g1klo+mod(k-g1klo+kshift,kperiod)
+  w=kp*hz
+  v=jp*hy
+  u=ip*hx
+  cgrn1(i,j,k)=cmplx(0.d0,0.d0, dp)
+  cgrn1(i,j,k)=rfun(u,v,w,gam,a,b,hz,1,1)
+enddo
+enddo
+enddo
+call ccfft3d(cgrn1,cgrn1,(/1,1,1/),iperiod,jperiod,kperiod,0)
 
-      function rfun(u,v,w,gam,a,b,hz,i,j) result(res)
+!2:
+do k=g2klo,ubound(cgrn2,3)
+do j=g2jlo,ubound(cgrn2,2)
+do i=g2ilo,ubound(cgrn2,1)
+  ip=g2ilo+mod(i-g2ilo+ishift,iperiod)
+  kp=g2klo+mod(k-g2klo+kshift,kperiod)
+  w=kp*hz
+  v=2.d0*ymin+(j-g2jlo)*hy ! v=2.d0*ymin+j*hy
+  u=ip*hx
+  cgrn2(i,j,k)=cmplx(0.d0,0.d0, dp)
+  cgrn2(i,j,k)=rfun(u,v,w,gam,a,b,hz,1,-1)
+enddo
+enddo
+enddo
+call ccfft3d(cgrn2,cgrn2,(/1,-1,1/),iperiod,jperiod,kperiod,0)
+
+!3:
+do k=g3klo,ubound(cgrn3,3)
+do j=g3jlo,ubound(cgrn3,2)
+do i=g3ilo,ubound(cgrn3,1)
+  jp=g3jlo+mod(j-g3jlo+jshift,jperiod)
+  kp=g3klo+mod(k-g3klo+kshift,kperiod)
+  w=kp*hz
+  v=jp*hy
+  u=2.d0*xmin+(i-g3ilo)*hx ! u=2.d0*xmin+i*hx
+  cgrn3(i,j,k)=cmplx(0.d0,0.d0, dp)
+  cgrn3(i,j,k)=rfun(u,v,w,gam,a,b,hz,-1,1)
+enddo
+enddo
+enddo
+call ccfft3d(cgrn3,cgrn3,(/-1,1,1/),iperiod,jperiod,kperiod,0)
+
+!4:
+do k=g4klo,ubound(cgrn4,3)
+do j=g4jlo,ubound(cgrn4,2)
+do i=g4ilo,ubound(cgrn4,1)
+  kp=g4klo+mod(k-g4klo+kshift,kperiod)
+  w=kp*hz
+  v=2.d0*ymin+(j-g4jlo)*hy ! v=2.d0*ymin+j*hy
+  u=2.d0*xmin+(i-g4ilo)*hx ! u=2.d0*xmin+i*hx
+  cgrn4(i,j,k)=cmplx(0.d0,0.d0, dp)
+  cgrn4(i,j,k)=rfun(u,v,w,gam,a,b,hz,-1,-1)
+enddo
+enddo
+enddo
+call ccfft3d(cgrn4,cgrn4,(/-1,-1,1/),iperiod,jperiod,kperiod,0)
+return
+end subroutine osc_getgrnpipe
+
+
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+function rfun(u,v,w,gam,a,b,hz,i,j) result(res)
 !this is the IGF version (non-IGF line is commented out)
 !this version contains (i**m)*(j**n)
-      implicit none
-      real*8 :: res
-      real*8 :: u,v,w,gam,a,b,hz
-      integer :: i,j
-      real*8, parameter :: pi=acos(-1.0d0)
-      real*8 :: ainv,binv,piainv,pibinv
-      real*8 :: zfun,kapmn,term
-      integer :: m,n
-      ainv=1.0d0/a
-      binv=1.0d0/b
-      piainv=pi*ainv
-      pibinv=pi*binv
+implicit none
+real(dp) :: res
+real(dp) :: u,v,w,gam,a,b,hz
+integer :: i,j
+real(dp), parameter :: pi=acos(-1.0d0)
+real(dp) :: ainv,binv,piainv,pibinv
+real(dp) :: zfun,kapmn,term
+integer :: m,n
+ainv=1.0d0/a
+binv=1.0d0/b
+piainv=pi*ainv
+pibinv=pi*binv
 !     rfun=0.d0
-      res=0.d0
-      do m=1,5
-      do n=1,5
-        kapmn=sqrt((m*pi*ainv)**2+(n*pi*binv)**2)
+res=0.d0
+do m=1,5
+do n=1,5
+  kapmn=sqrt((m*pi*ainv)**2+(n*pi*binv)**2)
 !!!!!   zfun=exp(-kapmn*abs(gam*w))
 !!!!!   zfun=exp(-kapmn*abs(w))
-        zfun=(exp(-kapmn*abs(gam*w-hz))-2.d0*exp(-kapmn*abs(gam*w))+exp(-kapmn*abs(gam*w+hz)))/(hz**2*kapmn**2)
+zfun=(exp(-kapmn*abs(gam*w-hz))-2.d0*exp(-kapmn*abs(gam*w))+exp(-kapmn*abs(gam*w+hz)))/(hz**2*kapmn**2)
 !       zfun=(exp(-kapmn*abs(w-hz))-2.d0*exp(-kapmn*abs(w))+exp(-kapmn*abs(w+hz)))/(hz**2*kapmn**2)
-        if(w.eq.0)zfun=zfun+2.d0/(hz*kapmn)
-        term=(i**m)*(j**n)*cos(m*u*piainv)*cos(n*v*pibinv)*zfun/kapmn
+if(w.eq.0)zfun=zfun+2.d0/(hz*kapmn)
+term=(i**m)*(j**n)*cos(m*u*piainv)*cos(n*v*pibinv)*zfun/kapmn
 !       rfun=rfun+term
-        res=res+term
-      enddo
-      enddo
-      res=res*2.d0*pi*ainv*binv !here is the correct normalization
-      return
-      end function rfun
+res=res+term
+enddo
+enddo
+res=res*2.d0*pi*ainv*binv !here is the correct normalization
 
+end function rfun
+
+
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
 subroutine fftconvcorr3d(crho,qgrn1,qgrn2,qgrn3,qgrn4,con,rilo,rjlo,rklo, &
-     &g1ilo,g1jlo,g1klo,g2ilo,g2jlo,g2klo,g3ilo,g3jlo,g3klo,g4ilo,g4jlo,g4klo, &
-     &cilo,cjlo,cklo,iperiod,jperiod,kperiod,hx,hy,hz,xmin,ymin,zmin)
+     g1ilo,g1jlo,g1klo,g2ilo,g2jlo,g2klo,g3ilo,g3jlo,g3klo,g4ilo,g4jlo,g4klo, &
+     cilo,cjlo,cklo,iperiod,jperiod,kperiod,hx,hy,hz,xmin,ymin,zmin)
 implicit none
-      integer :: rilo,rjlo,rklo,g1ilo,g1jlo,g1klo,g2ilo,g2jlo,g2klo,g3ilo,g3jlo,g3klo,g4ilo,g4jlo,g4klo
-      real*8 :: hx,hy,hz,xmin,ymin,zmin
-      integer :: cilo,cjlo,cklo,iperiod,jperiod,kperiod
-      integer :: cihi,cjhi,ckhi
-      real*8 :: fpei,qtot,factr
+integer :: rilo,rjlo,rklo,g1ilo,g1jlo,g1klo,g2ilo,g2jlo,g2klo,g3ilo,g3jlo,g3klo,g4ilo,g4jlo,g4klo
+real(dp) :: hx,hy,hz,xmin,ymin,zmin
+integer :: cilo,cjlo,cklo,iperiod,jperiod,kperiod
+integer :: cihi,cjhi,ckhi
+real(dp) :: fpei,qtot,factr
 !input arrays:
-      complex(dp), dimension(rilo:,rjlo:,rklo:) :: crho
-      complex(dp), dimension(g1ilo:,g1jlo:,g1klo:) :: qgrn1
-      complex(dp), dimension(g2ilo:,g2jlo:,g2klo:) :: qgrn2
-      complex(dp), dimension(g3ilo:,g3jlo:,g3klo:) :: qgrn3
-      complex(dp), dimension(g4ilo:,g4jlo:,g4klo:) :: qgrn4
-      real(dp), dimension(cilo:,cjlo:,cklo:) :: con
+complex(dp), dimension(rilo:,rjlo:,rklo:) :: crho
+complex(dp), dimension(g1ilo:,g1jlo:,g1klo:) :: qgrn1
+complex(dp), dimension(g2ilo:,g2jlo:,g2klo:) :: qgrn2
+complex(dp), dimension(g3ilo:,g3jlo:,g3klo:) :: qgrn3
+complex(dp), dimension(g4ilo:,g4jlo:,g4klo:) :: qgrn4
+real(dp), dimension(cilo:,cjlo:,cklo:) :: con
 !local arrays:
-      complex(dp), allocatable, dimension(:,:,:) :: ccon,ctmp
+complex(dp), allocatable, dimension(:,:,:) :: ccon,ctmp
+
+
+fpei=299792458.**2*1.e-7  ! this is 1/(4 pi eps0)
+qtot=1.d0 !fix later: 1.d-9 ! 1 nC
 !
-      fpei=299792458.**2*1.e-7  ! this is 1/(4 pi eps0)
-      qtot=1.d0 !fix later: 1.d-9 ! 1 nC
-!
-      allocate(ccon(cilo:cilo+iperiod-1,cjlo:cjlo+jperiod-1,cklo:cklo+kperiod-1))
-      allocate(ctmp(cilo:cilo+iperiod-1,cjlo:cjlo+jperiod-1,cklo:cklo+kperiod-1))
+allocate(ccon(cilo:cilo+iperiod-1,cjlo:cjlo+jperiod-1,cklo:cklo+kperiod-1))
+allocate(ctmp(cilo:cilo+iperiod-1,cjlo:cjlo+jperiod-1,cklo:cklo+kperiod-1))
 !
 !1st term:
-      ccon(:,:,:)=crho(:,:,:)*qgrn1(:,:,:)
-      call ccfft3d(ccon,ccon,(/-1,-1,-1/),iperiod,jperiod,kperiod,0)
+ccon(:,:,:)=crho(:,:,:)*qgrn1(:,:,:)
+call ccfft3d(ccon,ccon,(/-1,-1,-1/),iperiod,jperiod,kperiod,0)
+
 !2nd term:
-      ctmp(:,:,:)=crho(:,:,:)*qgrn2(:,:,:)
-      call ccfft3d(ctmp,ctmp,(/-1,1,-1/),iperiod,jperiod,kperiod,0)
-      ccon(:,:,:)=ccon(:,:,:)-ctmp(:,:,:)
+ctmp(:,:,:)=crho(:,:,:)*qgrn2(:,:,:)
+call ccfft3d(ctmp,ctmp,(/-1,1,-1/),iperiod,jperiod,kperiod,0)
+ccon(:,:,:)=ccon(:,:,:)-ctmp(:,:,:)
+
 !3rd term:
-      ctmp(:,:,:)=crho(:,:,:)*qgrn3(:,:,:)
-      call ccfft3d(ctmp,ctmp,(/1,-1,-1/),iperiod,jperiod,kperiod,0)
-      ccon(:,:,:)=ccon(:,:,:)-ctmp(:,:,:)
+ctmp(:,:,:)=crho(:,:,:)*qgrn3(:,:,:)
+call ccfft3d(ctmp,ctmp,(/1,-1,-1/),iperiod,jperiod,kperiod,0)
+ccon(:,:,:)=ccon(:,:,:)-ctmp(:,:,:)
+
 !4th term:
-      ctmp(:,:,:)=crho(:,:,:)*qgrn4(:,:,:)
-      call ccfft3d(ctmp,ctmp,(/1,1,-1/),iperiod,jperiod,kperiod,0)
-      ccon(:,:,:)=ccon(:,:,:)+ctmp(:,:,:)
+ctmp(:,:,:)=crho(:,:,:)*qgrn4(:,:,:)
+call ccfft3d(ctmp,ctmp,(/1,1,-1/),iperiod,jperiod,kperiod,0)
+ccon(:,:,:)=ccon(:,:,:)+ctmp(:,:,:)
+
 !normalize:
 !     factr=hx*hy*hz/( (1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod) )*fpei*qtot
-      factr=    1.d0/( (1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod) )*fpei*qtot
+factr=    1.d0/( (1.d0*iperiod)*(1.d0*jperiod)*(1.d0*kperiod) )*fpei*qtot
+
 !store final result in original size (not double size) real array:
-      cihi=ubound(con,1)
-      cjhi=ubound(con,2)
-      ckhi=ubound(con,3)
-      con(cilo:cihi,cjlo:cjhi,cklo:ckhi)=factr*ccon(cilo:cihi,cjlo:cjhi,cklo:ckhi)
+cihi=ubound(con,1)
+cjhi=ubound(con,2)
+ckhi=ubound(con,3)
+con(cilo:cihi,cjlo:cjhi,cklo:ckhi)=factr*real(ccon(cilo:cihi,cjlo:cjhi,cklo:ckhi), dp)
 return
 end subroutine fftconvcorr3d
 
-    subroutine osc_read_rectpipe_grn
-    implicit none
-    real(dp) :: apipeval,bpipeval,dxval,dyval,dzval,xminval,yminval,zminval,xmaxval,ymaxval,zmaxval,gamval
-    integer :: iloval,jloval,kloval,ihival,jhival,khival,iperval,jperval,kperval
-    open(unit=2,file='rectpipegrn.dat',form='unformatted',status='old')
-    read(2)apipeval,bpipeval,dxval,dyval,dzval,xminval,yminval,zminval,xmaxval,ymaxval,zmaxval, &
-           iloval,jloval,kloval,ihival,jhival,khival,iperval,jperval,kperval,gamval
-    read(2)cgrn1,cgrn2,cgrn3,cgrn4
-    close(2)
-    write(6,*)'Done reading rectpipe transformed Green functions with these parameters:'
-    write(6,*)'apipe,bpipe=',apipeval,bpipeval
-    write(6,*)'dx,dy,dz=',dxval,dyval,dzval
-    write(6,*)'xmin,ymin,zmin=',xminval,yminval,zminval
-    write(6,*)'xmax,ymax,zmax=',xmaxval,ymaxval,zmaxval
-    write(6,*)'ilo,jlo,klo=',iloval,jloval,kloval
-    write(6,*)'ihi,jhi,khi=',ihival,jhival,khival
-    write(6,*)'convolution iperiod,jperiod,kperiod=',iperval,jperval,kperval
-    write(6,*)'gamma=',gamval
-    return
-    end subroutine osc_read_rectpipe_grn
 
-    subroutine osc_write_rectpipe_grn(apipe,bpipe,delta,umin,umax,nlo,nhi,gamma)
-    implicit none
-    real(dp) :: apipe,bpipe,gamma
-    real(dp), dimension(3) :: delta,umin,umax
-    integer, dimension(3) :: nlo,nhi
-    real(dp) :: dx,dy,dz,xmin,ymin,zmin,xmax,ymax,zmax
-    integer :: nxlo,nylo,nzlo,nxhi,nyhi,nzhi
-    dx=delta(1); dy=delta(2); dz=delta(3)
-    xmin=umin(1); ymin=umin(2); zmin=umin(3)
-    xmax=umax(1); ymax=umax(2); zmax=umax(3)
-    nxlo=nlo(1); nylo=nlo(2); nzlo=nlo(3)
-    nxhi=nhi(1); nyhi=nhi(2); nzhi=nhi(3)
-    open(unit=2,file='rectpipegrn.dat',form='unformatted',status='unknown')
-    write(2)apipe,bpipe,dx,dy,dz,xmin,ymin,zmin,xmax,ymax,zmax,nxlo,nylo,nzlo,nxhi,nyhi,nzhi, &
-            size(cgrn1,1),size(cgrn1,2),size(cgrn1,3),gamma
-    write(2)cgrn1,cgrn2,cgrn3,cgrn4
-    close(2)
-    write(6,*)'done writing rectpipe transformed Green functions'
-    return
-    end subroutine osc_write_rectpipe_grn
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+subroutine osc_read_rectpipe_grn
+implicit none
+real(dp) :: apipeval,bpipeval,dxval,dyval,dzval,xminval,yminval,zminval,xmaxval,ymaxval,zmaxval,gamval
+integer :: iloval,jloval,kloval,ihival,jhival,khival,iperval,jperval,kperval
+open(unit=2,file='rectpipegrn.dat',form='unformatted',status='old')
+read(2)apipeval,bpipeval,dxval,dyval,dzval,xminval,yminval,zminval,xmaxval,ymaxval,zmaxval, &
+       iloval,jloval,kloval,ihival,jhival,khival,iperval,jperval,kperval,gamval
+read(2)cgrn1,cgrn2,cgrn3,cgrn4
+close(2)
+write(6,*)'Done reading rectpipe transformed Green functions with these parameters:'
+write(6,*)'apipe,bpipe=',apipeval,bpipeval
+write(6,*)'dx,dy,dz=',dxval,dyval,dzval
+write(6,*)'xmin,ymin,zmin=',xminval,yminval,zminval
+write(6,*)'xmax,ymax,zmax=',xmaxval,ymaxval,zmaxval
+write(6,*)'ilo,jlo,klo=',iloval,jloval,kloval
+write(6,*)'ihi,jhi,khi=',ihival,jhival,khival
+write(6,*)'convolution iperiod,jperiod,kperiod=',iperval,jperval,kperval
+write(6,*)'gamma=',gamval
 
-  subroutine osc_alloc_rectpipe_arrays(nlo,nhi,npad)
-  implicit none
-  integer, intent(in), dimension(3) :: nlo,nhi,npad
-  integer :: rilo,rihi,rjlo,rjhi,rklo,rkhi !rho dimensions
-  integer :: cilo,cihi,cjlo,cjhi,cklo,ckhi !phi dimensions
-  integer :: ipad,jpad,kpad
-  integer :: g1ihi,g1jhi,g1khi,g2ihi,g2jhi,g2khi,g3ihi,g3jhi,g3khi,g4ihi,g4jhi,g4khi
+end subroutine osc_read_rectpipe_grn
 
-  rilo=nlo(1); rihi=nhi(1); rjlo=nlo(2); rjhi=nhi(2); rklo=nlo(3); rkhi=nhi(3)
-  cilo=nlo(1); cihi=nhi(1); cjlo=nlo(2); cjhi=nhi(2); cklo=nlo(3); ckhi=nhi(3)
-  ipad=npad(1); jpad=npad(2); kpad=npad(3)
 
-  g1ilo=cilo-rihi; g1ihi=cihi-rilo; g1jlo=cjlo-rjhi; g1jhi=cjhi-rjlo; g1klo=cklo-rkhi; g1khi=ckhi-rklo
-  g2ilo=cilo-rihi; g2ihi=cihi-rilo; g2jlo=cjlo+rjlo; g2jhi=cjhi+rjhi; g2klo=cklo-rkhi; g2khi=ckhi-rklo
-  g3ilo=cilo+rilo; g3ihi=cihi+rihi; g3jlo=cjlo-rjhi; g3jhi=cjhi-rjlo; g3klo=cklo-rkhi; g3khi=ckhi-rklo
-  g4ilo=cilo+rilo; g4ihi=cihi+rihi; g4jlo=cjlo+rjlo; g4jhi=cjhi+rjhi; g4klo=cklo-rkhi; g4khi=ckhi-rklo
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+subroutine osc_write_rectpipe_grn(apipe,bpipe,delta,umin,umax,nlo,nhi,gamma)
+implicit none
+real(dp) :: apipe,bpipe,gamma
+real(dp), dimension(3) :: delta,umin,umax
+integer, dimension(3) :: nlo,nhi
+real(dp) :: dx,dy,dz,xmin,ymin,zmin,xmax,ymax,zmax
+integer :: nxlo,nylo,nzlo,nxhi,nyhi,nzhi
+dx=delta(1); dy=delta(2); dz=delta(3)
+xmin=umin(1); ymin=umin(2); zmin=umin(3)
+xmax=umax(1); ymax=umax(2); zmax=umax(3)
+nxlo=nlo(1); nylo=nlo(2); nzlo=nlo(3)
+nxhi=nhi(1); nyhi=nhi(2); nzhi=nhi(3)
+open(unit=2,file='rectpipegrn.dat',form='unformatted',status='unknown')
+write(2)apipe,bpipe,dx,dy,dz,xmin,ymin,zmin,xmax,ymax,zmax,nxlo,nylo,nzlo,nxhi,nyhi,nzhi, &
+        size(cgrn1,1),size(cgrn1,2),size(cgrn1,3),gamma
+write(2)cgrn1,cgrn2,cgrn3,cgrn4
+close(2)
+write(6,*)'done writing rectpipe transformed Green functions'
+return
+end subroutine osc_write_rectpipe_grn
 
-  if(.not.allocated(cgrn1))allocate(cgrn1(g1ilo:g1ihi+ipad,g1jlo:g1jhi+jpad,g1klo:g1khi+kpad))
-  if(.not.allocated(cgrn2))allocate(cgrn2(g2ilo:g2ihi+ipad,g2jlo:g2jhi+jpad,g2klo:g2khi+kpad))
-  if(.not.allocated(cgrn3))allocate(cgrn3(g3ilo:g3ihi+ipad,g3jlo:g3jhi+jpad,g3klo:g3khi+kpad))
-  if(.not.allocated(cgrn4))allocate(cgrn4(g4ilo:g4ihi+ipad,g4jlo:g4jhi+jpad,g4klo:g4khi+kpad))
-  return
-  end subroutine osc_alloc_rectpipe_arrays
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+subroutine osc_alloc_rectpipe_arrays(nlo,nhi,npad)
+implicit none
+integer, intent(in), dimension(3) :: nlo,nhi,npad
+integer :: rilo,rihi,rjlo,rjhi,rklo,rkhi !rho dimensions
+integer :: cilo,cihi,cjlo,cjhi,cklo,ckhi !phi dimensions
+integer :: ipad,jpad,kpad
+integer :: g1ihi,g1jhi,g1khi,g2ihi,g2jhi,g2khi,g3ihi,g3jhi,g3khi,g4ihi,g4jhi,g4khi
+
+rilo=nlo(1); rihi=nhi(1); rjlo=nlo(2); rjhi=nhi(2); rklo=nlo(3); rkhi=nhi(3)
+cilo=nlo(1); cihi=nhi(1); cjlo=nlo(2); cjhi=nhi(2); cklo=nlo(3); ckhi=nhi(3)
+ipad=npad(1); jpad=npad(2); kpad=npad(3)
+
+g1ilo=cilo-rihi; g1ihi=cihi-rilo; g1jlo=cjlo-rjhi; g1jhi=cjhi-rjlo; g1klo=cklo-rkhi; g1khi=ckhi-rklo
+g2ilo=cilo-rihi; g2ihi=cihi-rilo; g2jlo=cjlo+rjlo; g2jhi=cjhi+rjhi; g2klo=cklo-rkhi; g2khi=ckhi-rklo
+g3ilo=cilo+rilo; g3ihi=cihi+rihi; g3jlo=cjlo-rjhi; g3jhi=cjhi-rjlo; g3klo=cklo-rkhi; g3khi=ckhi-rklo
+g4ilo=cilo+rilo; g4ihi=cihi+rihi; g4jlo=cjlo+rjlo; g4jhi=cjhi+rjhi; g4klo=cklo-rkhi; g4khi=ckhi-rklo
+
+if(.not.allocated(cgrn1))allocate(cgrn1(g1ilo:g1ihi+ipad,g1jlo:g1jhi+jpad,g1klo:g1khi+kpad))
+if(.not.allocated(cgrn2))allocate(cgrn2(g2ilo:g2ihi+ipad,g2jlo:g2jhi+jpad,g2klo:g2khi+kpad))
+if(.not.allocated(cgrn3))allocate(cgrn3(g3ilo:g3ihi+ipad,g3jlo:g3jhi+jpad,g3klo:g3khi+kpad))
+if(.not.allocated(cgrn4))allocate(cgrn4(g4ilo:g4ihi+ipad,g4jlo:g4jhi+jpad,g4klo:g4khi+kpad))
+
+end subroutine osc_alloc_rectpipe_arrays
 
 end module open_spacecharge_mod

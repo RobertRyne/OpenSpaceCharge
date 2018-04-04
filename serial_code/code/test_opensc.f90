@@ -1,8 +1,8 @@
 ! Test code for the OpenSC space-charge package
 ! R.D. Ryne and C. Mayes, February 2018
-program opensc_test1
-use open_spacecharge_mod1
-use open_spacecharge_mod ! contains routines that begin with osc_ and some global variables that must persist for thread safety
+program opensc_test
+use open_spacecharge_mod
+use open_spacecharge_core_mod ! contains routines that begin with osc_ and some global variables that must persist for thread safety
 use test_mod, only : gendist, get_mesh_quantities, depose_rho_scalar, prntall
 implicit none
 type(mesh3d_struct) :: mesh3d

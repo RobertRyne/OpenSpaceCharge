@@ -162,5 +162,76 @@ end
 #endif
 
 
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+! Not currently used, Numerical Recipes FFT
+
+subroutine ccfftnr(cdata,nn,isign)
+implicit none
+integer nn,isign,i,j,n,m,istep,mmax
+complex(dp) cdata
+real(dp) data
+dimension cdata(nn),data(2*nn)
+real(dp) tempi,tempr,theta,wpr,wpi,wr,wi,wtemp,twopi
+do i=1,nn
+  data(2*i-1)=real(cdata(i))
+  data(2*i) =aimag(cdata(i))
+enddo
+! bit reversal:
+n=2*nn
+j=1
+do i=1,n,2
+  if(j>i)then
+    tempr=data(j)
+    tempi=data(j+1)
+    data(j)=data(i)
+    data(j+1)=data(i+1)
+    data(i)=tempr
+    data(i+1)=tempi
+   endif
+  m=n/2
+  do while ((m.ge.2).and.(j>m)) 
+    j=j-m
+    m=m/2
+  enddo
+  j=j+m
+enddo
+! Danielson-Lanczos:
+twopi=4.0d0*asin(1.0d0)
+mmax=2
+do while (n>mmax)
+  istep=2*mmax
+  theta=twopi/(isign*mmax)
+  wpr=-2.d0*sin(0.5d0*theta)**2
+  wpi=sin(theta)
+  wr=1.0
+  wi=0.0
+  do m=1,mmax,2
+    do i=m,n,istep
+      j=i+mmax
+      tempr=wr*data(j)-wi*data(j+1)
+      tempi=wr*data(j+1)+wi*data(j)
+      data(j)=data(i)-tempr
+      data(j+1)=data(i+1)-tempi
+      data(i)=data(i)+tempr
+      data(i+1)=data(i+1)+tempi
+    enddo
+    wtemp=wr
+    wr=wr*wpr-wi*wpi+wr
+    wi=wi*wpr+wtemp*wpi+wi
+  enddo
+  mmax=istep
+enddo 
+!     ezero=0.d0
+!     eunit=1.d0
+do i=1,nn
+  cdata(i)=data(2*i-1)+(0.d0,1.d0)*data(2*i)
+!       cdata(i)=data(2*i-1)+cmplx(ezero,eunit)*data(2*i)
+enddo
+
+end subroutine
+
 
 end module

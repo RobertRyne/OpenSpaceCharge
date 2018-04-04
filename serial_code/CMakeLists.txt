@@ -77,10 +77,10 @@ endif()
 set(sources
     code/fast_fourier_am.f90
     code/fft_interface_mod.f90
+    code/open_spacecharge_core_mod.f90
     code/open_spacecharge_mod.f90
-    code/open_spacecharge_mod1.f90
     code/test_mod.f90
-    code/test_opensc1.f90
+    code/test_opensc.f90
 )
 
 add_executable(test_opensc ${sources})
@@ -96,8 +96,8 @@ endif()
 add_library(openspacecharge STATIC 
     code/fast_fourier_am.f90
     code/fft_interface_mod.f90
-    code/open_spacecharge_mod.f90
-    code/open_spacecharge_mod1.f90)
+    code/open_spacecharge_core_mod.f90
+    code/open_spacecharge_mod.f90)
     
         
 

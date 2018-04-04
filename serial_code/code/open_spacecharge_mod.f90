@@ -326,7 +326,7 @@ if (present(E)) then
 endif
 
 if (present(B)) then 
-  E=mesh3d%bfield(ip, jp,  kp,  :)*ab*de*gh                 &
+  B=mesh3d%bfield(ip, jp,  kp,  :)*ab*de*gh                 &
    +mesh3d%bfield(ip, jp1, kp,  :)*ab*(1.-de)*gh            &
    +mesh3d%bfield(ip, jp1, kp1, :)*ab*(1.-de)*(1.-gh)       &
    +mesh3d%bfield(ip, jp,  kp1, :)*ab*de*(1.-gh)            &

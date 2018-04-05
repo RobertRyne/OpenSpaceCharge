@@ -28,7 +28,7 @@ endif()
 
 #--------------------------------------------
 #--------------------------------------------
-option(use_fftw "USE_FFTW" On)
+option(use_fftw "USE_FFTW" Off)
 if(use_fftw)
     add_definitions(-DUSE_FFTW)
     message(STATUS "Using FFTW")

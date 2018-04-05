@@ -45,6 +45,8 @@ real(dp) :: tval=0.d0 !the time, an argument passed to diagnostic routines, irre
 integer :: ifail !return flag for charge deposition routine
 
 integer :: open_status, namelist_file
+
+
 character(40) :: in_file
 integer :: nxlo,nxhi,nylo,nyhi,nzlo,nzhi
 namelist / opensc_test_params / &
@@ -175,6 +177,39 @@ if(rectpipe)then      !RECTANGULAR PIPE
   call space_charge_rectpipe(mesh3d,apipe,bpipe, direct_field_calc, integrated_green_function)
 endif
 print *, '...done'
+
+
+! New diagnostics
+call write_lines(mesh3d)
+
 !diagnostics:
 call prntall(0,n1,n_particle,size(phi,1),size(phi,2),size(phi,3),ptcl,mesh3d%efield,mesh3d%bfield,tval,delta,umin,rectpipe)
+
+contains
+
+subroutine write_lines(mesh3d)
+
+type(mesh3d_struct) :: mesh3d
+real(dp) :: x, y, z, Evec(3) 
+integer :: i, outfile
+
+
+open(newunit=outfile, file = 'z_Ez.dat')
+x = 0
+y = 0 
+do i = mesh3d%nlo(3), mesh3d%nhi(3)
+  z = i*mesh3d%delta(3) + mesh3d%min(3) 
+  call interpolate_field(x, y, z, mesh3d, E=Evec)
+  write(outfile, *) z, Evec(3)
+enddo  
+  
+close(outfile)
+
+end subroutine
+
+
+
 end program
+
+
+

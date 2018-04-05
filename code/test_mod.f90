@@ -12,6 +12,10 @@ integer, parameter, private :: qp = REAL128
 
 contains
 
+
+
+
+
       subroutine gendist(ptcls,n1,nraysp,sigmat,gaussiancutoff,disttype,iseed,apipe,bpipe,rectpipe)
      ! use mpi
       implicit none

@@ -52,6 +52,13 @@ real(dp), parameter :: clight=299792458.d0
 !call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ierr)
 myrank=0
 
+
+if (igfflag == 0 .and. idirectfieldcalc.eq.1) then
+  print *, 'Error: Direct field calc must use integrated Green function'
+  print *, 'Aborting...'
+  return
+endif
+
 dx=delta(1); dy=delta(2); dz=delta(3)
 ilo=nlo(1);ihi=nhi(1);jlo=nlo(2);jhi=nhi(2);klo=nlo(3);khi=nhi(3)
 ilo2=ilo; jlo2=jlo; klo2=klo
@@ -380,9 +387,15 @@ real(dp) :: res
 real(dp) :: x,y,z,r
 r=sqrt(x**2+y**2+z**2)
 !res=y-z*atan(y/z)+z*atan(x*y/(z*r))-y*log(x+r)-x*log(y+r)
+
 res=y-z*atan(y/z)+z*atan(x*y/(z*r))
 if (x+r /= 0) res = res -y*log(x+r)
 if (y+r /= 0) res = res -x*log(y+r)
+
+! TEST
+!res = z*atan(x*y,(r*z)) - y*atanh(r/x) - x*atanh(r/y)      ! Bad
+!res = z * atan(x*y/z*r) + y*log(1-x/r)/2 - y*log(1+x/r)/2  ! Works
+!res = -z**2 * (x/(x**2 + z**2) - y/(y**2 + z**2)) + z*atan(x*y/(z*r)) -y*log(x+r) - x*log(y+r) ! Works
 
 end function zlafun
 
@@ -472,6 +485,8 @@ real(dp), dimension(cilo:,cjlo:,cklo:) :: con
 complex(dp), allocatable, dimension(:,:,:) :: ccon
 real(dp) :: fpei,qtot,factr
 integer :: cihi,cjhi,ckhi
+
+print *, '---------conv3d'
 fpei=299792458.d0**2*1.d-7  ! this is 1/(4 pi eps0)
 qtot=1.d0 !fix later: 1.d-9 ! 1 nC
 allocate(ccon(cilo:cilo+iperiod-1,cjlo:cjlo+jperiod-1,cklo:cklo+kperiod-1))

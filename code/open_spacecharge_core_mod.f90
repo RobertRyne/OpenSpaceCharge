@@ -391,9 +391,10 @@ r=sqrt(x**2+y**2+z**2)
 res=y-z*atan(y/z)+z*atan(x*y/(z*r))
 if (x+r /= 0) res = res -y*log(x+r)
 if (y+r /= 0) res = res -x*log(y+r)
-
-! TEST
-!res = z*atan(x*y,(r*z)) - y*atanh(r/x) - x*atanh(r/y)      ! Bad
+ 
+! Alternative forms:
+!res = z*atan(x*y/(z*r)) - y*atanh(x/r) - x*log(y+r) ! Works
+!res = z*atan(x*y/(r*z))- y*atanh(r/x) - x*atanh(r/y)    ! Bad 
 !res = z * atan(x*y/z*r) + y*log(1-x/r)/2 - y*log(1+x/r)/2  ! Works
 !res = -z**2 * (x/(x**2 + z**2) - y/(y**2 + z**2)) + z*atan(x*y/(z*r)) -y*log(x+r) - x*log(y+r) ! Works
 
@@ -441,6 +442,9 @@ iperiod=size(cgrn,1); jperiod=size(cgrn,2); kperiod=size(cgrn,3)
 ipad=npad(1); jpad=npad(2); kpad=npad(3)
 !this puts the Green function where it's needed so the convolution ends up in the correct location in the array
 ishift=iperiod/2-(ipad+1)/2; jshift=jperiod/2-(jpad+1)/2; kshift=kperiod/2-(kpad+1)/2
+
+
+print *, 'klo_grn,ubound(cgrn,3): ', klo_grn,ubound(cgrn,3)
 !$ print *, 'OpenMP Green function calc'
 !$OMP PARALLEL DO &
 !$OMP DEFAULT(FIRSTPRIVATE), &
@@ -464,6 +468,8 @@ do k=klo_grn,ubound(cgrn,3)
   enddo
 enddo
 !$OMP END PARALLEL DO
+
+
 call ccfft3d(cgrn,cgrn,(/1,1,1/),iperiod,jperiod,kperiod,0)
 
 end subroutine osc_getgrnfree

@@ -41,6 +41,7 @@ logical :: direct_field_calc, integrated_green_function
 logical :: rectpipe, read_rectpipe, write_rectpipe
 integer :: igfflag,idirectfieldcalc
 
+real(dp) :: t1, t2 ! For timing
 real(dp) :: tval=0.d0 !the time, an argument passed to diagnostic routines, irrelevant in this test code
 integer :: ifail !return flag for charge deposition routine
 
@@ -57,8 +58,8 @@ namelist / opensc_test_params / &
 !Namelist defaults
 nxlo=1;  nylo=1;  nzlo=1
 nxhi=64; nyhi=64; nzhi=64
-e_tot = 5.d6    !5 MeV
-n_particle = 30000000
+e_tot = 250.d6    !250 MeV
+n_particle = 1000000
 mc2 = 0.510998910d6
 bunch_charge=0.25d-9
 sigma_x = 0.001d0; sigma_y = 0.001d0; sigma_z = 0.0001d0
@@ -155,6 +156,7 @@ if(.not.allocated(mesh3d%phi))allocate(mesh3d%phi(nlo(1):nhi(1),nlo(2):nhi(2),nl
 if(.not.allocated(mesh3d%efield))allocate(mesh3d%efield(nlo(1):nhi(1),nlo(2):nhi(2),nlo(3):nhi(3),1:3))
 if(.not.allocated(mesh3d%bfield))allocate(mesh3d%bfield(nlo(1):nhi(1),nlo(2):nhi(2),nlo(3):nhi(3),1:3))
 
+call cpu_time(t1)
 !======= Compute the space-charge fields =======
 if(.not.rectpipe)then !FREE SPACE
   print *, 'Space charge field calc with free-space boundary condition...'
@@ -177,36 +179,76 @@ if(rectpipe)then      !RECTANGULAR PIPE
   call space_charge_rectpipe(mesh3d,apipe,bpipe, direct_field_calc, integrated_green_function)
 endif
 print *, '...done'
+call cpu_time(t2)
+print *, 'Time for space charge calc (s): ', t2-t1
 
 
 ! New diagnostics
 call write_lines(mesh3d)
+call write_plane(mesh3d)
 
-!diagnostics:
+stop 
+
+!old diagnostics:
 call prntall(0,n1,n_particle,size(phi,1),size(phi,2),size(phi,3),ptcl,mesh3d%efield,mesh3d%bfield,tval,delta,umin,rectpipe)
 
 contains
 
 subroutine write_lines(mesh3d)
-
 type(mesh3d_struct) :: mesh3d
 real(dp) :: x, y, z, Evec(3) 
 integer :: i, outfile
 
+open(newunit=outfile, file = 'x_Ex.dat')
+z = 0
+y = 0 
+do i = mesh3d%nlo(1), mesh3d%nhi(1) -1 ! skip last point
+  x = (i-1)*mesh3d%delta(1) + mesh3d%min(1) 
+  call interpolate_field(x, y, z, mesh3d, E=Evec)
+  write(outfile, *) x, Evec(1)
+enddo  
+close(outfile) 
+
+open(newunit=outfile, file = 'y_Ey.dat')
+x = 0
+z = 0 
+do i = mesh3d%nlo(2), mesh3d%nhi(2) -1 ! skip last point
+  y = (i-1)*mesh3d%delta(2) + mesh3d%min(2) 
+  call interpolate_field(x, y, z, mesh3d, E=Evec)
+  write(outfile, *) y, Evec(2)
+enddo  
+close(outfile) 
 
 open(newunit=outfile, file = 'z_Ez.dat')
 x = 0
 y = 0 
-do i = mesh3d%nlo(3), mesh3d%nhi(3)
-  z = i*mesh3d%delta(3) + mesh3d%min(3) 
+do i = mesh3d%nlo(3), mesh3d%nhi(3) -1 ! skip last point
+  z = (i-1)*mesh3d%delta(3) + mesh3d%min(3) 
   call interpolate_field(x, y, z, mesh3d, E=Evec)
   write(outfile, *) z, Evec(3)
 enddo  
-  
-close(outfile)
-
+close(outfile)  
 end subroutine
 
+
+ 
+subroutine write_plane(mesh3d)
+type(mesh3d_struct) :: mesh3d
+real(dp) :: x, y, z, Evec(3) 
+integer :: i, k, outfile
+
+open(newunit=outfile, file = 'x_z_Ex_Ez.dat')
+y = 0 
+do k = mesh3d%nlo(3), mesh3d%nhi(3) -1 ! skip last point
+  z = (k-1)*mesh3d%delta(3) + mesh3d%min(3) 
+  do i = mesh3d%nlo(1), mesh3d%nhi(1) -1 ! skip last point
+    x = (i-1)*mesh3d%delta(1) + mesh3d%min(1) 
+    call interpolate_field(x, y, z, mesh3d, E=Evec)
+    write(outfile, *) x, z, Evec(1), Evec(3)
+  enddo
+enddo  
+close(outfile)  
+end subroutine
 
 
 end program

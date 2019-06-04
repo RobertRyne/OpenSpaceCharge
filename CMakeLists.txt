@@ -84,6 +84,7 @@ set(sources
 )
 
 add_executable(test_opensc ${sources})
+install(TARGETS test_opensc DESTINATION bin) 
 
 # Link FFTW
 #
@@ -99,5 +100,6 @@ add_library(openspacecharge STATIC
     code/open_spacecharge_core_mod.f90
     code/open_spacecharge_mod.f90)
     
-        
+# Install
+install(TARGETS openspacecharge DESTINATION lib)  
 

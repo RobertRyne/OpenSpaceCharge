@@ -104,7 +104,7 @@ end subroutine
 !------------------------------------------------------------------------
 !------------------------------------------------------------------------
 !+
-! Subroutine desposit_particles(xa, ya, za, mesh3d, total_charge, qa, resize_mesh)
+! Subroutine deposit_particles(xa, ya, za, mesh3d, total_charge, qa, resize_mesh)
 !
 ! Deposits particle arrays onto mesh
 !
@@ -125,7 +125,7 @@ end subroutine
 !-
 
 !routine for charge deposition
-subroutine desposit_particles(xa, ya, za, mesh3d, qa, total_charge, resize_mesh)
+subroutine deposit_particles(xa, ya, za, mesh3d, qa, total_charge, resize_mesh)
 
 real(dp) :: xa(:),ya(:),za(:)
 type(mesh3d_struct) :: mesh3d
@@ -236,7 +236,7 @@ enddo
 !if(ifail.ne.0)write(6,*)'(depose_rho_scalar) ifail=',ifail
 
 
-end subroutine desposit_particles
+end subroutine deposit_particles
 
 
 

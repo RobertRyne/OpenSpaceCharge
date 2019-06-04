@@ -122,6 +122,13 @@ endif
 
 ! set the magnetic field:
 gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
+
+! Zero field if at rest
+if (gb0 == 0) then
+   bfield = 0
+   return
+endif
+
 do k=lbound(phi,3),ubound(phi,3)
   do j=lbound(phi,2),ubound(phi,2)
     do i=lbound(phi,1),ubound(phi,1)

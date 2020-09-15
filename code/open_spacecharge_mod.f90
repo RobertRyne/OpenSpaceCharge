@@ -79,6 +79,33 @@ end subroutine
 !------------------------------------------------------------------------
 !+
 
+subroutine space_charge_cathodeimages(mesh3d, direct_field_calc, integrated_green_function,image_method)
+type(mesh3d_struct) :: mesh3d
+integer :: idirectfieldcalc=1
+integer :: igfflag=1
+logical, optional :: direct_field_calc, integrated_green_function
+integer, optional :: image_method
+integer :: imethod
+
+idirectfieldcalc=1 ! =0 to compute phi and use finite differences for E; =1 to compute E directly
+if(present(direct_field_calc) .and. .not. direct_field_calc)idirectfieldcalc=0
+
+igfflag=1 ! =0 for ordinary Green function; =1 for integrated Green function
+if(present(integrated_green_function) .and. .not. integrated_green_function) igfflag = 0
+
+imethod=1 ! =1 for convolution/correlation, =2 for shift method
+if(present(image_method) .and. image_method.eq.2)imethod=2
+
+call osc_cathodeimages_solver(mesh3d%rho, mesh3d%gamma, &
+  mesh3d%min,mesh3d%delta, mesh3d%phi, mesh3d%efield, mesh3d%bfield, &
+  mesh3d%nlo, mesh3d%nhi, mesh3d%nlo, mesh3d%nhi, mesh3d%npad, idirectfieldcalc,igfflag,imethod)
+end subroutine
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+
 subroutine space_charge_rectpipe(mesh3d, apipe, bpipe, direct_field_calc, integrated_green_function)
 type(mesh3d_struct) :: mesh3d
 real(dp) :: apipe, bpipe
@@ -316,6 +343,8 @@ endif
 if(kp<1 .or. kp>mesh3d%nhi(3)-1)then
     nflag=1
     write(6,*)'kerror:  kp=',kp
+    write(6,*)'z=',z
+    write(6,*)'mesh3d%min(3)=',mesh3d%min(3)
 !!!!!!!!!!write(6,*)ab,de,gh
   if(kp<1)then
     kp=1

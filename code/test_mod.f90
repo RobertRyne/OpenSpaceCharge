@@ -49,6 +49,7 @@ contains
           if(rectpipe)then
             if(r1**2*sigmat(1,1)/(0.5*apipe)**2+r3**2*sigmat(3,3)/(0.5*bpipe)**2.gt.0.9**2)goto 10
           endif
+          r2=0.d0; r4=0.d0; r6=0.d0
         endif
         if(disttype.eq.1)then
    11     continue
@@ -284,14 +285,14 @@ contains
       return
       end   
 
-subroutine get_mesh_quantities(xa,ya,za,lostflag, delta,umin, nlo,nhi,nlo_gbl,nhi_gbl,n1,nraysp,maxrayp)
+subroutine get_mesh_quantities(xa,ya,za,lostflag, delta,umin, nlo,nhi,nlo_gbl,nhi_gbl,n1,nraysp,maxrayp,isetzmin)
 !-!#ifdef MPIPARALLEL
 !     USE mpi
 !-!#endif
 implicit none
 integer, dimension(3) :: nlo,nhi,nlo_gbl,nhi_gbl
 real(dp), dimension(3) :: umin,delta
-integer :: n1,nraysp,maxrayp
+integer :: n1,nraysp,maxrayp,isetzmin
 !-! real(dp), dimension(maxrayp,n1) :: ptcls
 !type (coord_struct) :: ptcls(maxrayp)
 !
@@ -300,8 +301,8 @@ real(dp) :: xmax,ymax,zmax !not needed
 integer :: ifail,n
 integer :: mprocs,myrank,ierr
 real(dp) :: xsml,xbig,ysml,ybig,zsml,zbig
-!     real(dp), parameter :: eps=2.d-15   !3.34d-16 is OK on my Mac
-real(dp), parameter :: eps=0.5d0
+      real(dp), parameter :: eps=1.d-13 ! 2.d-15   !3.34d-16 is OK on my Mac
+!real(dp), parameter :: eps=0.5d0
 integer :: nx,ny,nz !temporaries
 !-!#ifdef MPIPARALLEL
 !     call MPI_COMM_SIZE(MPI_COMM_WORLD,mprocs,ierr)
@@ -332,6 +333,11 @@ delta(3)=(zbig-zsml)/(nz-3)
 umin(1)=xsml-delta(1)  !why did I put xmax here? not needed.  ; xmax=xbig+delta(1)
 umin(2)=ysml-delta(2)  !why did I put ymax here? not needed.  ; ymax=ybig+delta(2)
 umin(3)=zsml-delta(3)  !why did I put zmax here? not needed.  ; zmax=zbig+delta(3)
+if(isetzmin.eq.1)then !for cathode images, use this to see fields at the cathode surface
+  zsml=1.d-9
+  delta(3)=(zbig-zsml)/(nz-1)
+  umin(3)=zsml
+endif
 !
 !
 !-!#ifdef MPIPARALLEL

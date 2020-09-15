@@ -123,7 +123,16 @@ forall(k=1:n3, j=1:n2, i=1:n1)
 end forall
 
 call mccfft1d(tmp2,n1*n2,n3,idir(3))
-if(iskiptrans.eq.1)return
+!if(iskiptrans.eq.1)return !found bug 9/5/2020 !!!
+if(iskiptrans.eq.1)then
+  if(n1.ne.n3)then
+    write(6,*)'(ccfft3d) error: skipping the transpose requires n1=n3'
+    write(6,*)'but in this case, n1,n3=',n1,n3
+    stop
+  endif
+  b(:,:,:)=tmp2(:,:,:)
+  return
+endif
 forall(k=1:n3, j=1:n2, i=1:n1)
 !       ileft =(k-1)*n1*n2+(j-1)*n2+i
 !       iright=(i-1)*n2*n3+(j-1)*n3+k

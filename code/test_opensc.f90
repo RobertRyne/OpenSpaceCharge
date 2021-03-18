@@ -55,7 +55,7 @@ character(40) :: in_file
 integer :: nxlo,nxhi,nylo,nyhi,nzlo,nzhi
 namelist / opensc_test_params / &
   nxlo,nxhi,nylo,nyhi,nzlo,nzhi, n_particle, e_tot, bunch_charge, sigma_x, sigma_y, sigma_z, gaussiancutoff, &
-  direct_field_calc, integrated_green_function, cathode_images, image_method,&
+  direct_field_calc, integrated_green_function, cathode_images, image_method,disttype,&
   rectpipe, read_rectpipe, write_rectpipe, apipe, bpipe ! if rectangular pipe BC is being used, apipe=full width, bpipe=full height
 
 !Namelist defaults
@@ -67,11 +67,11 @@ mc2 = 0.510998910d6
 bunch_charge=0.25d-9
 sigma_x = 0.001d0; sigma_y = 0.001d0; sigma_z = 0.0001d0
 gaussiancutoff=4
-disttype=0 ! =0 for uniform, =1 for Gaussian
+disttype=1 ! =0 for uniform, =1 for Gaussian
 direct_field_calc = .true. ! .false.
 integrated_green_function = .true.
-cathode_images=.true.
-image_method=2 ! =1 for convolution/correlation, =2 for shifted Green function 
+cathode_images=.false.
+image_method=3 ! =1 for convolution/correlation, =2 for shifted Green function , =3 Chris' method
 rectpipe=.false.
 read_rectpipe=.false.
 write_rectpipe=.false.
@@ -154,6 +154,7 @@ write(6,*)'mesh zmin,zmax=',umin(3),umax(3)
 write(6,*)'delta(1:3)=',delta(1:3)
 
 call depose_rho_scalar(ptcl(:,1),ptcl(:,3),ptcl(:,5),lostflag,rho,chrgpermacro,nlo,delta,umin,n_particle,nlo,ifail)
+
 write(6,*)'Done with charge deposition'
 
   mesh3d%nlo = [nxlo, nylo, nzlo]
@@ -176,13 +177,28 @@ call cpu_time(t1)
 if(.not.rectpipe.and..not.cathode_images)then !FREE SPACE
   print *, 'Space charge field calc with free-space boundary condition...'
 !!call osc_freespace_solver(rho,gamma,delta,phi,efield,bfield,nlo,nhi,nlo,nhi,npad,idirectfieldcalc,igfflag)
-  call space_charge_freespace(mesh3d, direct_field_calc, integrated_green_function)
+  !mesh3d%rho(:,:,33:)=0
+  !call space_charge_freespace(mesh3d, direct_field_calc, integrated_green_function)
+  ! New method
+  print *, "Chris' method"
+  call space_charge_3d(mesh3d)
+  
 endif
 if(.not.rectpipe.and.cathode_images)then !FREE SPACE BUT WITH CATHODE IMAGES
   print *, 'Space charge field calc with cathode images...'
   if(umin(3).lt.0.d0)write(6,*)'error: umin(3) is less than zcathode!'
   if(umin(3).lt.0.d0)stop
-  call space_charge_cathodeimages(mesh3d, direct_field_calc, integrated_green_function, image_method)
+  
+  if (image_method == 3) then
+    print *, "Chris' method"
+    call space_charge_3d(mesh3d, at_cathode=.true.)
+  
+  else
+    call space_charge_cathodeimages(mesh3d, direct_field_calc, integrated_green_function, image_method)
+  endif
+  
+  
+  
 endif
 if(rectpipe)then      !RECTANGULAR PIPE
   print *, 'Space charge field calc with rectangular pipe boundary condition...'

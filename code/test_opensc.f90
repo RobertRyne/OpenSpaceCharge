@@ -181,7 +181,7 @@ if(.not.rectpipe.and..not.cathode_images)then !FREE SPACE
   !call space_charge_freespace(mesh3d, direct_field_calc, integrated_green_function)
   ! New method
   print *, "Chris' method"
-  call space_charge_3d(mesh3d)
+  call space_charge_3d(mesh3d, calc_bfield=.true.)
   
 endif
 if(.not.rectpipe.and.cathode_images)then !FREE SPACE BUT WITH CATHODE IMAGES
@@ -191,7 +191,7 @@ if(.not.rectpipe.and.cathode_images)then !FREE SPACE BUT WITH CATHODE IMAGES
   
   if (image_method == 3) then
     print *, "Chris' method"
-    call space_charge_3d(mesh3d, at_cathode=.true.)
+    call space_charge_3d(mesh3d, at_cathode=.true., calc_bfield=.true.)
   
   else
     call space_charge_cathodeimages(mesh3d, direct_field_calc, integrated_green_function, image_method)
@@ -277,17 +277,18 @@ end subroutine
  
 subroutine write_plane(mesh3d)
 type(mesh3d_struct) :: mesh3d
-real(dp) :: x, y, z, Evec(3) 
+real(dp) :: x, y, z, Evec(3), Bvec(3) 
 integer :: i, k, outfile
 
-open(newunit=outfile, file = 'x_z_Ex_Ez.dat')
+open(newunit=outfile, file = 'x_z_Ex_Ez_By.dat')
 y = 0 
 do k = mesh3d%nlo(3), mesh3d%nhi(3) -1 ! skip last point
   z = (k-1)*mesh3d%delta(3) + mesh3d%min(3) 
   do i = mesh3d%nlo(1), mesh3d%nhi(1) -1 ! skip last point
     x = (i-1)*mesh3d%delta(1) + mesh3d%min(1) 
     call interpolate_field(x, y, z, mesh3d, E=Evec)
-    write(outfile, *) x, z, Evec(1), Evec(3)
+    call interpolate_field(x, y, z, mesh3d, B=Bvec)
+    write(outfile, *) x, z, Evec(1), Evec(3), Bvec(2)
   enddo
 enddo  
 close(outfile)  

@@ -1,1 +1,0 @@
-      common/extalk/fa(monoms)

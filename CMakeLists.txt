@@ -39,7 +39,7 @@ if(GetFFTW)
 # FFTW3 
 include(ExternalProject)
 ExternalProject_Add(project_fftw
-  URL http://www.fftw.org/fftw-3.3.7.tar.gz
+  URL http://www.fftw.org/fftw-3.3.9.tar.gz
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/fftw
   CONFIGURE_COMMAND ${CMAKE_CURRENT_BINARY_DIR}/fftw/src/project_fftw/configure --enable-openmp --prefix=<INSTALL_DIR>
   BUILD_COMMAND make -j 8

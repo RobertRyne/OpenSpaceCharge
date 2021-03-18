@@ -46,7 +46,7 @@ integer :: ilo2,ihi2,jlo2,jhi2,klo2,khi2,iperiod,jperiod,kperiod
 complex(dp), allocatable, dimension(:,:,:) :: crho
 
 integer :: icomp,i,j,k,im1,ip1,jm1,jp1,km1,kp1
-real(dp) :: gb0,xfac,yfac,zfac
+real(dp) :: beta0,xfac,yfac,zfac
 integer :: mprocs,myrank,ierr
 real(dp), parameter :: clight=299792458.d0
 !
@@ -124,12 +124,12 @@ if(idirectfieldcalc.eq.1)then
 endif
 
 ! set the magnetic field:
-gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
+beta0=sqrt(1-1/gam0**2)
 do k=lbound(phi,3),ubound(phi,3)
   do j=lbound(phi,2),ubound(phi,2)
     do i=lbound(phi,1),ubound(phi,1)
-      bfield(i,j,k,1)=-efield(i,j,k,2)/clight/gb0/gam0
-      bfield(i,j,k,2)= efield(i,j,k,1)/clight/gb0/gam0
+      bfield(i,j,k,1)=-efield(i,j,k,2)*beta0/clight
+      bfield(i,j,k,2)= efield(i,j,k,1)*beta0/clight
       bfield(i,j,k,3)=0.d0
     enddo
   enddo
@@ -554,7 +554,7 @@ integer :: ilo2,ihi2,jlo2,jhi2,klo2,khi2
 integer :: icomp
 real(dp), parameter :: clight=299792458.d0
 integer :: i,j,k,im1,ip1,jm1,jp1,km1,kp1
-real(dp) :: gb0,xfac,yfac,zfac
+real(dp) :: beta0,xfac,yfac,zfac
 
 dx=delta(1); dy=delta(2); dz=delta(3)
 xmin=umin(1); ymin=umin(2); zmin=umin(3)
@@ -610,12 +610,12 @@ if(idirectfieldcalc.eq.1)then
 endif
 
 ! set the magnetic field:
-gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
+beta0=sqrt(1-1/gam0**2)
 do k=lbound(phi,3),ubound(phi,3)
   do j=lbound(phi,2),ubound(phi,2)
     do i=lbound(phi,1),ubound(phi,1)
-      bfield(i,j,k,1)=-efield(i,j,k,2)/clight/gb0/gam0
-      bfield(i,j,k,2)= efield(i,j,k,1)/clight/gb0/gam0
+      bfield(i,j,k,1)=-efield(i,j,k,2)*beta0/clight
+      bfield(i,j,k,2)= efield(i,j,k,1)*beta0/clight
       bfield(i,j,k,3)=0.d0
     enddo
   enddo
@@ -924,7 +924,7 @@ real(dp), allocatable, dimension(:,:,:,:) :: efieldimg
 complex(dp), allocatable, dimension(:,:,:) :: crho
 
 integer :: icomp,i,j,k,im1,ip1,jm1,jp1,km1,kp1
-real(dp) :: gb0,xfac,yfac,zfac
+real(dp) :: beta0,xfac,yfac,zfac
 integer :: mprocs,myrank,ierr
 real(dp), parameter :: clight=299792458.d0
 !
@@ -1067,14 +1067,14 @@ endif ! imethod
 endif ! idirectfieldcalc
 
 ! set the magnetic field:
-gb0=sqrt((gam0+1.d0)*(gam0-1.d0))
+beta0=sqrt(1-1/gam0**2)
 do k=lbound(phi,3),ubound(phi,3)
   do j=lbound(phi,2),ubound(phi,2)
     do i=lbound(phi,1),ubound(phi,1)
-!     bfield(i,j,k,1)=-efield(i,j,k,2)/clight/gb0/gam0
-!     bfield(i,j,k,2)= efield(i,j,k,1)/clight/gb0/gam0
-      bfield(i,j,k,1)=-(efield(i,j,k,2)+2.d0*efieldimg(i,j,k,2))/clight/gb0/gam0 !I subtracted efieldimg above,
-      bfield(i,j,k,2)= (efield(i,j,k,1)+2.d0*efieldimg(i,j,k,1))/clight/gb0/gam0 !so add it back 2x to get sum
+!     bfield(i,j,k,1)=-efield(i,j,k,2)*beta0/clight
+!     bfield(i,j,k,2)= efield(i,j,k,1)*beta0/clight
+      bfield(i,j,k,1)=-(efield(i,j,k,2)+2.d0*efieldimg(i,j,k,2))*beta0/clight !I subtracted efieldimg above,
+      bfield(i,j,k,2)= (efield(i,j,k,1)+2.d0*efieldimg(i,j,k,1))*beta0/clight !so add it back 2x to get sum
       bfield(i,j,k,3)=0.d0
     enddo
   enddo

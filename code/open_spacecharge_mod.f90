@@ -722,7 +722,7 @@ end function
 ! elemental real(dp) function lafun2(x,y,z)
 !
 ! The indefinite integral:
-! \int 1/r^3 dx dy dz = 
+! \int 1/r dx dy dz = 
 !          -z**2*atan(x*y/(z*r))/2 - y**2*atan(x*z/(y*r))/2 -x**2*atan(y*z/(x*r))/2 
 !           +y*z*log(x+r) + x*z*log(y+r) + x*y*log(z+r)
 !

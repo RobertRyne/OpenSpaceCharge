@@ -176,13 +176,13 @@ endif
 if (resize) then
   min = [minval(xa), minval(ya), minval(za)]
   max = [maxval(xa), maxval(ya), maxval(za)] 
-  delta =(max(:) - min(:) ) / (mesh3d%nhi(:) - mesh3d%nlo(:) + 1)
-  ! Pad by by 1.1 bins
-  pad = delta*1.1
-  min = min !- pad
-  max = max + pad
-  delta =(max(:) - min(:) ) / (mesh3d%nhi(:) - mesh3d%nlo(:) + 1)
-
+  delta =(max(:) - min(:) ) / (mesh3d%nhi(:) - mesh3d%nlo(:) )
+  
+  ! Small padding to protect against indexing errors
+  min = min - 1.0e-6_dp*delta
+  max = max + 1.0e-6_dp*delta
+  delta =(max(:) - min(:) ) / (mesh3d%nhi(:) - mesh3d%nlo(:) )
+  
   mesh3d%min = min
   mesh3d%max = max
   mesh3d%delta = delta

@@ -1,5 +1,9 @@
 # OpenSpaceCharge
 
+
+
+
+
 The OpenSC package is an open-source software library written primarily in Fortran 2008 for calculating space charge fields [1]. It was originally developed as a reusable Poisson solver with free-space boundary conditions for use within the Warp framework [2], and will be incorporated into the Particle-In-Cell Scalable Application Resource, PICSAR [3].
 
 OpenSC currently implements free-space and rectangular conducting pipe methods using integrated Green functions (IGFs) as described in [4] and [5], respectively. The package provides high-level routines to:
@@ -20,22 +24,28 @@ OpenSC currently implements free-space and rectangular conducting pipe methods u
 
 [5] J.Qiang,S.Lidia,R.D.Ryne,andC.Limborg-Deprey,"Three-dimensional quasi-static model for high brightness beam Dynamics simulation," Phys. Rev. ST Accel. Beams, Vol. 9, 044204 (2006)
 
+
+## Examples
+
+An [example notebook](./examples/benchmark.ipynb) replicates the figures in Ref. [1]. 
+
+<img src="./img/Ez_zline.png" width="400">
+<img src="./img/Ex_xline.png" width="400">
+
+
 ## Compilation
 
 To compile:
 
-mkdir build
-
-cd build
-
-cmake ../
-
-make
+```
+cmake -S . -B build
+cmake --build build
+```
 
 Run test program:
 
+```
+cd build
 ./test_opensc
+```
 
-or:
-
-mpirun -n 8 ./test_opensc
